@@ -18,6 +18,8 @@ body {
     font-weight: 400;
     font-style: normal;
 
+    width: 100vw;
+    height: 100vh;
     background-color: black;
     overflow: hidden;
 }

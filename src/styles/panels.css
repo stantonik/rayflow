@@ -1,0 +1,82 @@
+/*
+ * panels.css
+ * Copyright (C) 2025 stantonik
+ *
+ * Distributed under terms of the MIT license.
+ */
+
+/* Outer card */
+.inspector-field {
+    background-color: #1e1e1e;
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+    transition: box-shadow 0.2s ease;
+}
+
+.inspector-field:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+
+/* Field title */
+.inspector-title {
+    font-weight: bold;
+    font-size: 0.85rem;
+    color: #eee;
+    margin-bottom: 8px;
+}
+
+/* Container for all inputs */
+.inspector-params {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Each input + label wrapper */
+.inspector-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #2a2a2a;
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid #444;
+    min-width: 60px;
+}
+
+/* Labels */
+.inspector-label {
+    font-size: 0.7rem;
+    color: #aaa;
+    margin-bottom: 4px;
+}
+
+/* Number inputs */
+.inspector-input {
+    width: 50px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    border: 1px solid #555;
+    background-color: #1e1e1e;
+    color: #fff;
+    font-size: 0.8rem;
+}
+
+.inspector-input:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 2px #4a90e2;
+}
+
+/* Color inputs */
+.inspector-color-input {
+    width: 50px;
+    height: 24px;
+    padding: 0;
+    border-radius: 3px;
+    border: 1px solid #555;
+    cursor: pointer;
+}
+
