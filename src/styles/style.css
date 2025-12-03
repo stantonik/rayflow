@@ -1,0 +1,29 @@
+/*
+ * style.css
+ * Copyright (C) 2025 stantonik
+ *
+ * Distributed under terms of the MIT license.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Victor+Mono:ital,wght@0,100..700;1,100..700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Space Mono", monospace;
+    font-weight: 400;
+    font-style: normal;
+
+    background-color: black;
+    overflow: hidden;
+}
+
+#app {
+    width: 100%;
+    height: 100%;
+}
+
