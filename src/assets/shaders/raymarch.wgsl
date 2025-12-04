@@ -105,10 +105,16 @@ fn sd_cylinder(p: vec3<f32>, radius: f32) -> f32 {
     return length(p.xz) - radius;
 }
 
-fn sd_cone_simple(p: vec3<f32>, angle: f32) -> f32 {
-    let q = vec2(length(p.xz), p.y);
-    let s = atan2(q.x, q.y);
-    return length(q) * cos(angle) - q.y;
+fn sd_cone_simple(p: vec3<f32>, r: f32, h: f32) -> f32 {
+    // c = normalize( vec2(h, r) )
+    let hh = h * 2.0;
+    let invLen = inverseSqrt(hh * hh + r * r);
+    let c = vec2<f32>(hh * invLen, r * invLen);
+
+    let q = length(vec2<f32>(p.x, p.z));
+
+    // max( distance-to-side, distance-to-base-plane )
+    return max(dot(c, vec2<f32>(q, p.y - h)), -hh - p.y + h);
 }
 
 fn sd_capsule(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
@@ -158,7 +164,7 @@ fn sdf_primitive(p: vec3<f32>, primitiveType: u32, scale: vec3<f32>, rotation: v
             return sd_cylinder(q, scale.x);
         }
         case 4u: { // CONE
-            return sd_cone_simple(q, scale.x);
+            return sd_cone_simple(q, scale.x, scale.y);
         }
         case 5u: { // CAPSULE
             let a = vec3<f32>(0.0, -scale.y * 0.5, 0.0);
