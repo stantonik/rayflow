@@ -163,7 +163,6 @@ export class RayMarcher {
         obj._objectBuffer = this.objectBuffer;
         obj._device = this.device;
         obj._objectBufferIdx = this.objects.length;
-        obj._index = this.objects.length;
 
         this.objects.push(obj);
         const data = new Uint32Array([this.objects.length]);
@@ -267,7 +266,7 @@ export class RayMarcher {
         const dataArr = new Float32Array(data);
         const intersectedId = dataArr[0];
 
-        const obj = this.getObjectById(intersectedId);
+        const obj = this.objects[intersectedId];
         this._lastIntersectedObj = obj;
         return obj;
     }

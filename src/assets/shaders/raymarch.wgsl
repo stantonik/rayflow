@@ -66,8 +66,10 @@ struct SDFResult {
 const MAX_DIST: f32 = 100.0;
 const SURF_DIST: f32 = 0.001;
 const MAX_STEPS: i32 = 256;
+const PI: f32 = 3.14159265359;
 
 const MAT_GRID = 0.0;
+const MAT_GIZMO = 1.0;
 
 const MAT_SKY_COLOR: vec3<f32> = vec3(0.25, 0.25, 0.25);
 
@@ -127,6 +129,16 @@ fn sd_capsule(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
 // -------------------------------------------------------------
 // Rotation helper
 // -------------------------------------------------------------
+fn rotate_x(p: vec3<f32>, angle: f32) -> vec3<f32> {
+    let c = cos(angle);
+    let s = sin(angle);
+    return vec3<f32>(
+        p.x,
+        c * p.y - s * p.z,
+        s * p.y + c * p.z
+    );
+}
+
 fn rotate_y(p: vec3<f32>, angle: f32) -> vec3<f32> {
     let c = cos(angle);
     let s = sin(angle);
@@ -134,6 +146,16 @@ fn rotate_y(p: vec3<f32>, angle: f32) -> vec3<f32> {
         c * p.x + s * p.z,
         p.y,
         -s * p.x + c * p.z
+    );
+}
+
+fn rotate_z(p: vec3<f32>, angle: f32) -> vec3<f32> {
+    let c = cos(angle);
+    let s = sin(angle);
+    return vec3<f32>(
+        c * p.x - s * p.y,
+        s * p.x + c * p.y,
+        p.z
     );
 }
 
@@ -211,9 +233,9 @@ fn get_dist_obj(p: vec3<f32>) -> SDFResult {
 
         if d < res.dist {
             res.dist = d;
-            res.idx = obj.id;
+            res.idx = f32(i);
             res.color = obj.color;
-            if (obj.id == objectHitBuffer[0]) {
+            if obj.id == objectHitBuffer[0] {
                 res.color = mix(res.color, vec3<f32>(1.0, 0.0, 0.0), 0.4);
             }
         }
@@ -221,6 +243,81 @@ fn get_dist_obj(p: vec3<f32>) -> SDFResult {
 
     return res;
 }
+
+fn get_dist_gizmo(p: vec3<f32>) -> SDFResult {
+    var res: SDFResult;
+    res.dist = MAX_DIST;
+
+    if (objectHitBuffer[0] < 0.0) {
+        return res;
+    }
+    let trackedObj = objects[u32(objectHitBuffer[0])];
+
+    let x_color = vec3<f32>(1.0, 0.0, 0.0);
+    let y_color = vec3<f32>(0.0, 0.0, 1.0);
+    let z_color = vec3<f32>(0.0, 1.0, 0.0);
+
+    let q = p - trackedObj.position; 
+    let s = trackedObj.scale * 1.2;
+
+    //let sx = trackedObj.
+
+    let cone_dia = 0.1;
+    let cone_h = 0.1;
+    let line_r = 0.02; // radius of connecting line
+
+    // --- X axis ---
+    let x_cone_pos = vec3<f32>(s.x + cone_h, 0.0, 0.0);
+    var d = sd_cone_simple(rotate_z(q - x_cone_pos, PI / 2.0), cone_dia, cone_h);
+    if d < res.dist {
+        res.dist = d;
+        res.color = x_color;
+    }
+
+    // X line
+    d = sd_capsule(q, vec3<f32>(0.0, 0.0, 0.0), x_cone_pos, line_r);
+    if d < res.dist {
+        res.dist = d;
+        res.color = x_color;
+    }
+
+    // --- Y axis ---
+    let y_cone_pos = vec3<f32>(0.0, s.y + cone_h, 0.0);
+    d = sd_cone_simple(q - y_cone_pos, cone_dia, cone_h);
+    if d < res.dist {
+        res.dist = d;
+        res.color = y_color;
+    }
+
+    // Y line
+    d = sd_capsule(q, vec3<f32>(0.0, 0.0, 0.0), y_cone_pos, line_r);
+    if d < res.dist {
+        res.dist = d;
+        res.color = y_color;
+    }
+
+    // --- Z axis ---
+    let z_cone_pos = vec3<f32>(0.0, 0.0, s.z + cone_h);
+    d = sd_cone_simple(rotate_x(q - z_cone_pos, -PI / 2.0), cone_dia, cone_h);
+    if d < res.dist {
+        res.dist = d;
+        res.color = z_color;
+    }
+
+    // Z line
+    d = sd_capsule(q, vec3<f32>(0.0, 0.0, 0.0), z_cone_pos, line_r);
+    if d < res.dist {
+        res.dist = d;
+        res.color = z_color;
+    }
+
+    if d < MAX_DIST {
+        res.mat = MAT_GIZMO;
+    }
+
+    return res;
+}
+
 
 // -------------------------------------------------------------
 // SCENE SDF (distance + material + color integrated here)
@@ -257,7 +354,7 @@ fn get_dist(p: vec3<f32>) -> SDFResult {
     // ----- OBJECTS -----
     let o = get_dist_obj(p);
     if o.dist < res.dist {
-        res = o; // includes color + idx
+        res = o;
     }
 
     return res;
@@ -266,7 +363,7 @@ fn get_dist(p: vec3<f32>) -> SDFResult {
 // -------------------------------------------------------------
 // RAY MARCH (returns SDFResult including color)
 // -------------------------------------------------------------
-fn ray_march(ro: vec3<f32>, rd: vec3<f32>) -> SDFResult {
+fn ray_march(ro: vec3<f32>, rd: vec3<f32>, mode: u32) -> SDFResult {
     var total = 0.0;
     var res: SDFResult;
 
@@ -277,7 +374,13 @@ fn ray_march(ro: vec3<f32>, rd: vec3<f32>) -> SDFResult {
 
     for (var i = 0; i < MAX_STEPS; i++) {
         let p = ro + rd * total;
-        let s = get_dist(p);
+        var s: SDFResult;
+
+        if mode == 0u {
+            s = get_dist(p);
+        } else {
+            s = get_dist_gizmo(p);
+        }
 
         total += s.dist;
         res = s;
@@ -356,16 +459,24 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
     let ro = camera.position;
     let rd = normalize(pos3 - ro);
 
-    let rm = ray_march(ro, rd);
-    let dist = rm.dist;
+    var hit = ray_march(ro, rd, 0u);
+
+    if objectHitBuffer[0] >= 0.0 {
+        let gizmo_hit = ray_march(ro, rd, 1u);
+
+        if gizmo_hit.dist < MAX_DIST {
+            hit = gizmo_hit;
+        }
+    }
+    let dist = hit.dist;
 
     if dist < MAX_DIST {
         let hit_pos = ro + rd * dist;
         let normal = get_normal(hit_pos);
 
-        var color = rm.color;
+        var color = hit.color;
 
-        if rm.mat != MAT_GRID {
+        if hit.mat != MAT_GRID {
         // Lighting
             let light_pos = vec3(2.0, 5.0, -1.0);
             let light_dir = normalize(light_pos - hit_pos);
@@ -373,10 +484,10 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
 
         // Shadow
             let shadow_pos = hit_pos + normal * 0.01;
-            let shadow = select(0.3, 1.0, ray_march(shadow_pos, light_dir).dist > length(light_pos - shadow_pos));
+            let shadow = select(0.3, 1.0, ray_march(shadow_pos, light_dir, 0u).dist > length(light_pos - shadow_pos));
 
             let ambient = 0.2;
-            let albedo = rm.color;
+            let albedo = hit.color;
 
             let shaded = albedo * (ambient + diffuse * shadow * 0.8);
 

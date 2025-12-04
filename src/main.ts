@@ -10,7 +10,6 @@ import { vec3 } from "gl-matrix";
 import { RayMarcher } from "./ray-march";
 import { Camera } from "./camera";
 import { RayObject, PrimitiveType } from "./ray-object";
-import { GizmoRenderer } from "./gizmos";
 import { PanelManager } from "./gui/panel-manager";
 import { InspectorPanel, type InspectorFieldType, type InspectorParams } from "./gui/panels/inspector-panel";
 import { HierarchyPanel, type ContextMenu, type HierarchyItem } from "./gui/panels/hierarchy-panel";
@@ -115,7 +114,6 @@ hierarchyPanel.onContextMenu((): ContextMenu => {
 // --- 3D Init ---
 let device: GPUDevice;
 let raymarcher: RayMarcher;
-let gizmoRenderer: GizmoRenderer;
 let camera: Camera;
 
 const canvas = scenePanel.canvas;
@@ -152,7 +150,6 @@ async function start(canvas: HTMLCanvasElement) {
     camera = new Camera();
     camera.position = [5, 8, 12];
     raymarcher = new RayMarcher(device, format, camera);
-    gizmoRenderer = new GizmoRenderer(device, format, camera);
 
     // const testMesh = OBJLoader.parseToMesh((await import("./assets/gizmos/cone.obj?raw")).default, device);
     // testMesh.setModelMatrix(model);
@@ -186,10 +183,7 @@ async function start(canvas: HTMLCanvasElement) {
 
         raymarcher.render(pass);
 
-        gizmoRenderer.render(pass);
-
         pass.end();
-
         device.queue.submit([encoder.finish()]);
 
         requestAnimationFrame(frame);
