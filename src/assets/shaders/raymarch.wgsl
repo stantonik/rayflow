@@ -375,7 +375,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
             let shaded = albedo * (ambient + diffuse * shadow * 0.8);
 
         // Fog
-            let fog = exp(-dist * 0.02);
+            let fog = exp(-dist * 0.005);
             color = mix(MAT_SKY_COLOR, shaded, fog);
         }
 
