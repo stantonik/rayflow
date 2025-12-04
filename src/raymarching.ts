@@ -169,8 +169,8 @@ export class RayMarcher {
         obj.sync();
     }
 
-    removeObject(obj: Object): void {
-
+    removeObject(_obj: Object): void {
+        // TODO
     }
 
     getObject(name: string): Object | null {
@@ -178,14 +178,15 @@ export class RayMarcher {
     }
 
     redeemMemory() {
-
+        // TODO
     }
 
     updateUniforms(uniforms: RaymarchUniforms) {
         for (const key in uniforms) {
             const value = uniforms[key as keyof RaymarchUniforms];
             if (value !== undefined) {
-                this.lastUniforms[key as keyof RaymarchUniforms] = value;
+                // TODO: fix TS error
+                (this.lastUniforms as any)[key as keyof RaymarchUniforms] = value;
             }
         }
 
