@@ -1,5 +1,5 @@
 /*
- * raymarching.ts
+ * ray-march.ts
  * Copyright (C) 2025 stantonik <stantonik@stantonik-mba.local>
  *
  * Distributed under terms of the MIT license.
@@ -163,23 +163,57 @@ export class RayMarcher {
         obj._objectBuffer = this.objectBuffer;
         obj._device = this.device;
         obj._objectBufferIdx = this.objects.length;
-        obj._id = this.objects.length;
+        obj._index = this.objects.length;
 
         this.objects.push(obj);
         const data = new Uint32Array([this.objects.length]);
         this.device.queue.writeBuffer(this.objectCountBuffer, 0, data.buffer);
-        
+
         obj.sync();
     }
 
-    removeObject(_obj: RayObject): void {
-        // TODO
+    removeObject(obj: RayObject): void {
+        const idx = obj._objectBufferIdx;
+        if (idx === undefined || idx < 0 || idx >= this.objects.length) return;
+
+        const lastIdx = this.objects.length - 1;
+
+        if (idx !== lastIdx) {
+            // Swap with the last object in array
+            const lastObj = this.objects[lastIdx];
+
+            // Update GPU buffer: copy last object data to removed spot
+            const encoder = this.device.createCommandEncoder();
+            encoder.copyBufferToBuffer(
+                lastObj._objectBuffer!,
+                lastIdx * RayObject.GPU_DATA_SIZE_WPAD_BYTES,
+                obj._objectBuffer!,
+                idx * RayObject.GPU_DATA_SIZE_WPAD_BYTES,
+                RayObject.GPU_DATA_SIZE_WPAD_BYTES
+            );
+            this.device.queue.submit([encoder.finish()]);
+
+            // Update last object's indices
+            lastObj._objectBufferIdx = idx;
+
+            // Replace in CPU array
+            this.objects[idx] = lastObj;
+        }
+
+        // Remove last object from CPU array
+        this.objects.pop();
+
+        // Update objectCountBuffer
+        const data = new Uint32Array([this.objects.length]);
+        this.device.queue.writeBuffer(this.objectCountBuffer, 0, data.buffer);
+
+        obj.destroy();
     }
 
     getObjectByName(name: string): RayObject | null {
         return this.objects.find((obj) => obj.name === name) ?? null;
     }
-    
+
     getObjectById(id: number): RayObject | null {
         return this.objects.find((obj) => obj.id == id) ?? null;
     }
@@ -233,7 +267,7 @@ export class RayMarcher {
         const dataArr = new Float32Array(data);
         const intersectedId = dataArr[0];
 
-        const obj = intersectedId >= 0 ? this.objects[intersectedId]: null;
+        const obj = this.getObjectById(intersectedId);
         this._lastIntersectedObj = obj;
         return obj;
     }

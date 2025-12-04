@@ -24,6 +24,9 @@ export const PrimitiveType = {
 export type PrimitiveType = typeof PrimitiveType[keyof typeof PrimitiveType];
 
 export class RayObject {
+    private static globalId = 0;
+    private static typeCountsRecord: Map<PrimitiveType, number> = new Map();
+
     name: string;
 
     static GPU_DATA_SIZE_WPAD_BYTES: number = 80;
@@ -32,14 +35,13 @@ export class RayObject {
     rotation: vec3;
     scale: vec3;
     color: vec3;
-    _id!: number;
     primitive: PrimitiveType;
+    readonly id: number;
 
-    get id() { return this._id; }
 
-    _device!: GPUDevice;
-    _objectBuffer!: GPUBuffer;
-    _objectBufferIdx!: number;
+    _device?: GPUDevice;
+    _objectBuffer?: GPUBuffer;
+    _objectBufferIdx?: number;
 
     constructor({
         name = "",
@@ -57,6 +59,7 @@ export class RayObject {
         primitive?: PrimitiveType;
     } = {}) {
         this.name = name;
+        this.id = RayObject.generateId();
 
         // Copy so caller can't mutate shared arrays
         this.position = [...position] as vec3;
@@ -65,9 +68,15 @@ export class RayObject {
         this.color = [...color] as vec3;
 
         this.primitive = primitive;
+        RayObject.typeCountsRecord.set(
+            primitive,
+            (RayObject.typeCountsRecord.get(primitive) || 0) + 1
+        );
     }
 
     sync(): void {
+        if (!this._device || !this._objectBuffer || this._objectBufferIdx === undefined) return;
+
         const offset = this._objectBufferIdx * RayObject.GPU_DATA_SIZE_WPAD_BYTES;
 
         const data = new Float32Array(RayObject.GPU_DATA_SIZE_WPAD_BYTES / 4);
@@ -75,7 +84,7 @@ export class RayObject {
         data.set(this.rotation, 4);
         data.set(this.scale, 8);
         data.set(this.color, 12);
-        data.set([this.primitive, this._id], 16);
+        data.set([this.primitive, this.id], 16);
         this._device.queue.writeBuffer(
             this._objectBuffer,
             offset,
@@ -83,5 +92,33 @@ export class RayObject {
             0,
             data.byteLength
         );
+    }
+
+    destroy(): void {
+        // Clear GPU references
+        this._device = undefined;
+        this._objectBuffer = undefined;
+        this._objectBufferIdx = undefined;
+
+        // Optional: clear arrays to prevent accidental mutation
+        this.position = [0, 0, 0];
+        this.rotation = [0, 0, 0];
+        this.scale = [0, 0, 0];
+        this.color = [0, 0, 0];
+
+        // Clear name
+        this.name = "";
+    }
+
+    private static generateId(): number {
+        // Use a global counter combined with a random salt (32-bit integer)
+        RayObject.globalId++;
+        const randomSalt = Math.floor(Math.random() * 0xffff);
+        // Combine: high 16 bits counter, low 16 bits random
+        return ((RayObject.globalId & 0xffff) << 16) | (randomSalt & 0xffff);
+    }
+
+    static getCountByType(type: PrimitiveType): number {
+        return RayObject.typeCountsRecord.get(type) || 0;
     }
 }  

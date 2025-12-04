@@ -7,7 +7,7 @@
 
 import "./styles/style.css"
 import { vec3 } from "gl-matrix";
-import { RayMarcher } from "./raymarching";
+import { RayMarcher } from "./ray-march";
 import { Camera } from "./camera";
 import { RayObject, PrimitiveType } from "./ray-object";
 import { GizmoRenderer } from "./gizmos";
@@ -65,6 +65,7 @@ const itemCtxMenu = (item: HierarchyItem) => {
     return [
         {
             text: `Remove ${item.name}`, callback: () => {
+                raymarcher.removeObject(item.data?.["objectRef"]);
                 hierarchyPanel.removeItem(item);
             }
         }
@@ -80,16 +81,19 @@ const itemOnClick = (item: HierarchyItem) => {
 }
 
 hierarchyPanel.onContextMenu((): ContextMenu => {
+    const formatPrimitiveName = (name: string): string => {
+        return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+    }
     const primitiveNames = Object.keys(PrimitiveType) as (keyof typeof PrimitiveType)[];
     const primitiveMenuItems: ContextMenu = primitiveNames.map((name) => ({
-        text: name,
+        text: formatPrimitiveName(name),
         callback: () => {
             const primitiveValue: PrimitiveType = PrimitiveType[name];
             const obj = new RayObject({
                 primitive: primitiveValue
             });
             raymarcher.addObject(obj);
-            obj.name = `${name}${obj.id}`;
+            obj.name = `${formatPrimitiveName(name)}${RayObject.getCountByType(obj.primitive)}`;
 
             hierarchyPanel.addItem({
                 name: obj.name,
@@ -154,7 +158,14 @@ async function start(canvas: HTMLCanvasElement) {
     // testMesh.setModelMatrix(model);
 
     // Default Object
-    addObject(new RayObject({ name: "Cube", color: [0.2, 0.8, 0.2] }));
+    const cube = new RayObject({ name: "Cube", color: [0.2, 0.8, 0.2] });
+    raymarcher.addObject(cube);
+    hierarchyPanel.addItem({
+        name: cube.name,
+        onClick: itemOnClick,
+        onContextMenu: itemCtxMenu,
+        data: { objectRef: cube }
+    });
 
     // --- FRAME LOOP ---
     function frame(t: number) {
@@ -185,17 +196,6 @@ async function start(canvas: HTMLCanvasElement) {
     }
 
     requestAnimationFrame(frame);
-}
-
-function addObject(obj: RayObject) {
-    raymarcher.addObject(obj);
-
-    hierarchyPanel.addItem({
-        name: obj.name,
-        onClick: itemOnClick,
-        onContextMenu: itemCtxMenu,
-        data: { objectRef: obj }
-    });
 }
 
 // --- EVENT LISTENERS ---
