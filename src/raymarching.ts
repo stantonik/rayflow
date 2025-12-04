@@ -9,7 +9,7 @@ import { Mesh, type VertexFormat } from "./mesh";
 import raymarchWGSL from "./assets/shaders/raymarch.wgsl?raw"
 import { type vec2, type vec4 } from "gl-matrix";
 import type { Camera } from "./camera";
-import { Object } from "./object";
+import { RayObject } from "./ray-object";
 
 export type RaymarchUniforms = {
     resolution?: vec2;
@@ -29,7 +29,7 @@ export class RayMarcher {
     private lastUniforms: RaymarchUniforms;
     private uniformBuffer: GPUBuffer;
 
-    private objects: Object[];
+    private objects: RayObject[];
     private objectBuffer: GPUBuffer;
     private objectCountBuffer: GPUBuffer;
     private objectHitBuffer: GPUBuffer;
@@ -40,7 +40,7 @@ export class RayMarcher {
 
     private mesh: Mesh;
 
-    private _lastIntersectedObj!: Object | null;
+    private _lastIntersectedObj!: RayObject | null;
     get lastIntersectedObj() { return this._lastIntersectedObj; }
 
     constructor(device: GPUDevice, format: GPUTextureFormat, camera: Camera) {
@@ -80,7 +80,7 @@ export class RayMarcher {
         });
 
         this.objectBuffer = device.createBuffer({
-            size: Object.GPU_DATA_SIZE_WPAD_BYTES * 128,
+            size: RayObject.GPU_DATA_SIZE_WPAD_BYTES * 128,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
 
@@ -131,7 +131,12 @@ export class RayMarcher {
         });
     }
 
-    addObject(obj: Object): void {
+    selectObject(obj: RayObject): void {
+        this.device.queue.writeBuffer(this.objectHitBuffer, 0, Float32Array.from([obj.id]).buffer);
+        this._lastIntersectedObj = obj;
+    }
+
+    addObject(obj: RayObject): void {
         // Increase GPU buffer
         if (this.objects.length >= this.objectBuffer.size) {
             const newSize = this.objectBuffer.size * 2;
@@ -167,15 +172,15 @@ export class RayMarcher {
         obj.sync();
     }
 
-    removeObject(_obj: Object): void {
+    removeObject(_obj: RayObject): void {
         // TODO
     }
 
-    getObjectByName(name: string): Object | null {
+    getObjectByName(name: string): RayObject | null {
         return this.objects.find((obj) => obj.name === name) ?? null;
     }
     
-    getObjectById(id: number): Object | null {
+    getObjectById(id: number): RayObject | null {
         return this.objects.find((obj) => obj.id == id) ?? null;
     }
 
@@ -206,7 +211,7 @@ export class RayMarcher {
         this.device.queue.writeBuffer(this.uniformBuffer, 0, data.buffer);
     }
 
-    async checkCollision(): Promise<Object | null> {
+    async checkCollision(): Promise<RayObject | null> {
         const encoder = this.device.createCommandEncoder();
         encoder.copyBufferToBuffer(
             this.objectHitBuffer,          // source: GPU-written storage buffer

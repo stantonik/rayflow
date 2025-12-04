@@ -5,9 +5,9 @@
  * Distributed under terms of the MIT license.
  */
 
-import type { GroupPanelPartInitParameters, IContentRenderer, PanelDimensionChangeEvent } from "dockview-core";
 import { Utils } from "../../utils";
 import { vec3 } from "gl-matrix";
+import { Panel } from "./panel";
 
 export type InspectorParams = {
     position: vec3,
@@ -18,25 +18,18 @@ export type InspectorParams = {
 
 export type InspectorFieldType = "xyz" | "color";
 
-export class InspectorPanel implements IContentRenderer {
+export class InspectorPanel extends Panel {
     private _parameters!: InspectorParams | null;
     get parameters() { return this._parameters; }
-    onFieldChangeCb!: (name: string, type: InspectorFieldType, value: any) => void | null;
-
-    private readonly _element: HTMLElement;
-    get element() {
-        return this._element;
-    }
 
     constructor() {
-        this._element = document.createElement("div");
-        this._element.style.color = "white";
-        this._element.className = "inspector-panel scrollable";
+        super();
+
+        this._element.classList.add('inspector-panel', 'scrollable');
     }
 
-    init(params: GroupPanelPartInitParameters): void {
-        params.params["handler"] = this;
-    }
+    // Callbacks
+    onFieldChangeCb!: (name: string, type: InspectorFieldType, value: any) => void | null;
 
     updateFields(params: InspectorParams | null) {
         this._parameters = params;
@@ -107,7 +100,7 @@ export class InspectorPanel implements IContentRenderer {
             input.value = Utils.rgbToHexStr({r:linked[0], g:linked[1], b:linked[2]});
             input.className = "inspector-color-input";
 
-            input.addEventListener("change", () => {
+            input.addEventListener("input", () => {
                 const rgb = Utils.hexStrToRgb(input.value) ?? { r: 0, g: 0, b: 0 };
                 linked[0] = rgb.r;
                 linked[1] = rgb.g;

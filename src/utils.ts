@@ -5,7 +5,7 @@
  * Distributed under terms of the MIT license.
  */
 
- export class Utils {
+export class Utils {
     static hexStrToRgb(hex: string): { r: number; g: number; b: number } | null {
         // Remove '#' if present
         hex = hex.replace(/^#/, '');
@@ -31,5 +31,9 @@
         const bHex = Math.max(0, Math.min(255, rgb.b)).toString(16).padStart(2, '0');
 
         return `#${rHex}${gHex}${bHex}`;
+    }
+
+    static sleep(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 } 

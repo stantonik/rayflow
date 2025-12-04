@@ -7,7 +7,7 @@
 
 .inspector-panel.scrollable {
     overflow-y: auto;
-    max-height: 100%;
+    height: 100%;
     width: 100%;
 }
 /* Outer card */
@@ -17,11 +17,6 @@
     border-radius: 6px;
     padding: 10px;
     margin-bottom: 10px;
-    transition: box-shadow 0.2s ease;
-}
-
-.inspector-field:hover {
-    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
 }
 
 /* Field title */
@@ -83,5 +78,74 @@
     border-radius: 3px;
     border: 1px solid #555;
     cursor: pointer;
+}
+
+
+/* Scrollable panel */
+.hierarchy-panel.scrollable {
+    overflow-y: auto;
+    height: 100%;
+    width: 100%;
+}
+
+/* List root and nested lists */
+.hierarchy-list {
+    list-style: none;
+    padding-left: 5px;
+    margin: 0;
+}
+
+/* Individual items */
+.hierarchy-item {
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    user-select: none;
+    color: #eee;
+    font-size: 0.85rem;
+}
+
+.hierarchy-context-menu-item:hover {
+    background-color: #3a3a3a;
+}
+
+.hierarchy-context-menu {
+    position: fixed;
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 5px;
+    z-index: 9999;
+    color: #eee;
+    font-family: sans-serif;
+}
+
+.hierarchy-context-menu-item {
+    padding: 4px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.hierarchy-context-menu-item:hover {
+    background-color: #3a3a3a;
+}
+
+.hierarchy-context-submenu {
+    position: absolute;
+    background-color: #2a2a2a;
+    top: 0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 5px;
+    display: none;
+    z-index: 9999;
+}
+
+.has-children::after {
+    content: "▶";
+    float: right;
 }
 

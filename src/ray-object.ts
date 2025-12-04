@@ -1,5 +1,5 @@
 /*
- * object.ts
+ * ray-object.ts
  * Copyright (C) 2025 stantonik <stantonik@stantonik-mba.local>
  *
  * Distributed under terms of the MIT license.
@@ -23,7 +23,7 @@ export const PrimitiveType = {
 
 export type PrimitiveType = typeof PrimitiveType[keyof typeof PrimitiveType];
 
-export class Object {
+export class RayObject {
     name: string;
 
     static GPU_DATA_SIZE_WPAD_BYTES: number = 80;
@@ -68,9 +68,9 @@ export class Object {
     }
 
     sync(): void {
-        const offset = this._objectBufferIdx * Object.GPU_DATA_SIZE_WPAD_BYTES;
+        const offset = this._objectBufferIdx * RayObject.GPU_DATA_SIZE_WPAD_BYTES;
 
-        const data = new Float32Array(Object.GPU_DATA_SIZE_WPAD_BYTES / 4);
+        const data = new Float32Array(RayObject.GPU_DATA_SIZE_WPAD_BYTES / 4);
         data.set(this.position, 0);
         data.set(this.rotation, 4);
         data.set(this.scale, 8);

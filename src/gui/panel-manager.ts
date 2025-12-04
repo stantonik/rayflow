@@ -7,64 +7,62 @@
 
 import '../styles/panels.css'
 import 'dockview-core/dist/styles/dockview.css';
-import { createDockview, DockviewApi, themeDark, type CreateComponentOptions, type GroupPanelPartInitParameters, type IContentRenderer, type IDockviewPanel, type ITabRenderer, type TitleEvent } from "dockview-core";
+import { createDockview, DockviewApi, themeDark, type CreateComponentOptions, type IContentRenderer, type ITabRenderer } from "dockview-core";
 import { ScenePanel } from "./panels/scene-panel";
 import { InspectorPanel } from "./panels/inspector-panel";
 import { HierarchyPanel } from "./panels/hierarchy-panel";
-
-class Tab implements ITabRenderer {
-    private readonly _element: HTMLElement;
-    get element() {
-        return this._element;
-    }
-
-    constructor() {
-        this._element = document.createElement("div");
-        this._element.style.padding = "5px 10px 0 10px";
-    }
-
-    init(params: GroupPanelPartInitParameters): void {
-        params.api.onDidTitleChange((event: TitleEvent) => {
-            this._element.textContent = event.title;
-        });
-    }
-}
-
-export type PanelName = "Scene" | "Inspector" | "Hierarchy";
+import { type Panel, DefaultTab } from './panels/panel';
+import { Utils } from '../utils';
 
 export class PanelManager {
     private api: DockviewApi;
-    private panels: IDockviewPanel[];
+    private panelHandlers: Panel[];
 
     constructor(container: HTMLElement) {
+        this.panelHandlers = []
+
+        const scenePanel = new ScenePanel();
+        const inspectorPanel = new InspectorPanel();
+        const hierarchyPanel = new HierarchyPanel();
+        this.panelHandlers.push(scenePanel);
+        this.panelHandlers.push(inspectorPanel);
+        this.panelHandlers.push(hierarchyPanel);
+
         this.api = createDockview(container, {
             theme: themeDark,
             createComponent: (options: CreateComponentOptions): IContentRenderer => {
                 switch (options.name) {
                     case "Scene":
-                        return new ScenePanel();
+                        return scenePanel;
                     case "Inspector":
-                        return new InspectorPanel();
+                        return inspectorPanel;
                     case "Hierarchy":
-                        return new HierarchyPanel();
+                        return hierarchyPanel;
                     default:
                         throw new Error("Panel not found");
                 }
             },
-            createTabComponent: (_: CreateComponentOptions): ITabRenderer => {
-                return new Tab();
+            createTabComponent: (options: CreateComponentOptions): ITabRenderer => {
+                switch (options.name) {
+                    case "default":
+                        return new DefaultTab();
+                    default:
+                        throw new Error("Tab not found");
+                }
             },
         });
-        
-        this.panels = []
+    }
 
+    async initLayout(): Promise<void> {
+        // --- Scene ---
         const scene = this.api.addPanel({
             id: "scene",
             component: "Scene",
             title: "Scene",
             tabComponent: "default"
-        })
+        });
 
+        // --- Inspector ---
         const inspector = this.api.addPanel({
             id: "inspector",
             component: "Inspector",
@@ -77,9 +75,10 @@ export class PanelManager {
             minimumWidth: 200,
             maximumWidth: 350,
             initialWidth: 250,
-        })
+        });
 
-        const hierarchy = this.api.addPanel({
+        // --- Hierarchy ---
+        this.api.addPanel({
             id: "hierarchy",
             component: "Hierarchy",
             title: "Hierarchy",
@@ -91,20 +90,17 @@ export class PanelManager {
             minimumWidth: 200,
             maximumWidth: 350,
             initialWidth: 250,
-        })
-
-        this.panels.push(scene);
-        this.panels.push(inspector);
-        this.panels.push(hierarchy);
-    }
-
-    getPanelParam(panel: PanelName, param: string): any {
-        return this.panels.find((p) => p.api.component === panel)?.params?.[param];
-    }
-
-    setPanelParam(panel: PanelName, param: string, value: any): void {
-        return this.panels.find((p) => p.api.component === panel)?.api.updateParameters({
-            [param]: value
         });
+
+        await Utils.sleep(50); // Delay for all panels to be init
+    }
+
+    getPanel<T extends Panel>(cls: new (...args: any[]) => T): T | null {
+        for (const p of this.panelHandlers) {
+            if (p instanceof cls) {
+                return p as T;
+            }
+        }
+        return null;
     }
 }

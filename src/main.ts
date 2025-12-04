@@ -9,35 +9,104 @@ import "./styles/style.css"
 import { vec3 } from "gl-matrix";
 import { RayMarcher } from "./raymarching";
 import { Camera } from "./camera";
-import { Object, PrimitiveType } from "./object";
+import { RayObject, PrimitiveType } from "./ray-object";
 import { GizmoRenderer } from "./gizmos";
 import { PanelManager } from "./gui/panel-manager";
-import type { InspectorFieldType, InspectorPanel, InspectorParams } from "./gui/panels/inspector-panel";
+import { InspectorPanel, type InspectorFieldType, type InspectorParams } from "./gui/panels/inspector-panel";
+import { HierarchyPanel, type ContextMenu, type HierarchyItem } from "./gui/panels/hierarchy-panel";
+import { ScenePanel } from "./gui/panels/scene-panel";
 
+// --- ENTRY POINT ---
 const app = document.querySelector("#app")! as HTMLElement;
 
 // --- Panels init ---
 const panelManager = new PanelManager(app);
-const inpectorPanel = panelManager.getPanelParam("Inspector", "handler") as InspectorPanel;
 
-const canvas = panelManager.getPanelParam("Scene", "canvas") as HTMLCanvasElement;
+await panelManager.initLayout();
 
-// On first Scene load and resize
-let sceneLoaded = false;
-async function resize(width: number, height: number) {
-    if (!sceneLoaded) {
-        await start(canvas);
-        setupEventListeners(canvas);
-        sceneLoaded = true;
+const inpectorPanel = panelManager.getPanel(InspectorPanel)!;
+const scenePanel = panelManager.getPanel(ScenePanel)!;
+const hierarchyPanel = panelManager.getPanel(HierarchyPanel)!;
+
+// Panels callback setup
+inpectorPanel.onFieldChangeCb = (name: string, _type: InspectorFieldType, value: any): void | null => {
+    const obj = raymarcher.lastIntersectedObj;
+    if (!obj) {
+        return;
+    }
+    if (name === "Position") {
+        obj.position = value;
+    } else if (name === "Rotation") {
+        obj.rotation = value;
+    } else if (name === "Scale") {
+        obj.scale = value;
+    } else if (name === "Material") {
+        obj.color = [value[0] / 255, value[1] / 255, value[2] / 255];
+    }
+    obj.sync();
+}
+
+const inspectorInspect = (obj: RayObject | null) => {
+    let params: InspectorParams | null = null;
+
+    if (obj) {
+        params = {
+            position: obj.position,
+            rotation: obj.rotation,
+            scale: obj.scale,
+            color: [obj.color[0] * 255, obj.color[1] * 255, obj.color[2] * 255],
+        } as InspectorParams;
     }
 
-    raymarcher.updateUniforms({
-        resolution: [width, height],
-    });
-    camera.aspect = width / height;
-    camera.updateMatrices();
+    inpectorPanel.updateFields(params);
 }
-panelManager.setPanelParam("Scene", "onResize", resize);
+
+const itemCtxMenu = (item: HierarchyItem) => {
+    return [
+        {
+            text: `Remove ${item.name}`, callback: () => {
+                hierarchyPanel.removeItem(item);
+            }
+        }
+    ] as ContextMenu;
+}
+
+const itemOnClick = (item: HierarchyItem) => {
+    const obj = item.data?.["objectRef"] as RayObject;
+    if (obj) {
+        raymarcher.selectObject(obj);
+        inspectorInspect(obj);
+    }
+}
+
+hierarchyPanel.onContextMenu((): ContextMenu => {
+    const primitiveNames = Object.keys(PrimitiveType) as (keyof typeof PrimitiveType)[];
+    const primitiveMenuItems: ContextMenu = primitiveNames.map((name) => ({
+        text: name,
+        callback: () => {
+            const primitiveValue: PrimitiveType = PrimitiveType[name];
+            const obj = new RayObject({
+                primitive: primitiveValue
+            });
+            raymarcher.addObject(obj);
+            obj.name = `${name}${obj.id}`;
+
+            hierarchyPanel.addItem({
+                name: obj.name,
+                onClick: itemOnClick,
+                onContextMenu: itemCtxMenu,
+                data: { objectRef: obj }
+            });
+        }
+    }));
+
+    return [
+        {
+            text: 'Create new primitive',
+            children: primitiveMenuItems
+        }
+    ];
+});
 
 // --- 3D Init ---
 let device: GPUDevice;
@@ -45,6 +114,15 @@ let raymarcher: RayMarcher;
 let gizmoRenderer: GizmoRenderer;
 let camera: Camera;
 
+const canvas = scenePanel.canvas;
+await start(canvas);
+
+resize(canvas.width, canvas.height);
+scenePanel.onResizeCb = resize;
+
+setupEventListeners(canvas);
+
+// --- Function definitions ---
 async function start(canvas: HTMLCanvasElement) {
     // --- Init WebGPU ---
     const adapter = await navigator.gpu.requestAdapter();
@@ -68,33 +146,15 @@ async function start(canvas: HTMLCanvasElement) {
     });
 
     camera = new Camera();
+    camera.position = [5, 8, 12];
     raymarcher = new RayMarcher(device, format, camera);
     gizmoRenderer = new GizmoRenderer(device, format, camera);
 
     // const testMesh = OBJLoader.parseToMesh((await import("./assets/gizmos/cone.obj?raw")).default, device);
     // testMesh.setModelMatrix(model);
 
-    const sphere1 = new Object({ name: "Sphere1" });
-    raymarcher.addObject(sphere1);
-    const sphere2 = new Object({ name: "Sphere2", primitive: PrimitiveType.SPHERE, scale: [1.0, 1.0, 3.0], position: [2, 0, 0], color: [0, 0.8, 0] });
-    raymarcher.addObject(sphere2);
-
-    inpectorPanel.onFieldChangeCb = (name: string, _type: InspectorFieldType, value: any): void | null => {
-        const obj = raymarcher.lastIntersectedObj;
-        if (!obj) {
-            return;
-        }
-        if (name === "Position") {
-            obj.position = value;
-        } else if (name === "Rotation") {
-            obj.rotation = value;
-        } else if (name === "Scale") {
-            obj.scale = value;
-        } else if (name === "Material") {
-            obj.color = [value[0] / 255, value[1] / 255, value[2] / 255];
-        }
-        obj.sync();
-    }
+    // Default Object
+    addObject(new RayObject({ name: "Cube", color: [0.2, 0.8, 0.2] }));
 
     // --- FRAME LOOP ---
     function frame(t: number) {
@@ -127,12 +187,31 @@ async function start(canvas: HTMLCanvasElement) {
     requestAnimationFrame(frame);
 }
 
+function addObject(obj: RayObject) {
+    raymarcher.addObject(obj);
+
+    hierarchyPanel.addItem({
+        name: obj.name,
+        onClick: itemOnClick,
+        onContextMenu: itemCtxMenu,
+        data: { objectRef: obj }
+    });
+}
+
 // --- EVENT LISTENERS ---
 
 // Assume `camera` is an instance of Camera
 let isLeftDown = false;
 let isRightDown = false;
 let lastMouse: [number, number] = [0, 0];
+
+function resize(width: number, height: number) {
+    raymarcher.updateUniforms({
+        resolution: [width, height],
+    });
+    camera.aspect = width / height;
+    camera.updateMatrices();
+}
 
 function setupEventListeners(canvas: HTMLCanvasElement) {
     // --- Mouse down ---
@@ -154,18 +233,10 @@ function setupEventListeners(canvas: HTMLCanvasElement) {
             await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
             const obj = await raymarcher.checkCollision();
-            let params: InspectorParams | null = null;
             if (obj) {
                 console.log(`intersected object name: ${obj.name}`);
-                params = {
-                    position: obj.position,
-                    rotation: obj.rotation,
-                    scale: obj.scale,
-                    color: [obj.color[0] * 255, obj.color[1] * 255, obj.color[2] * 255],
-                } as InspectorParams;
-            } 
-
-            inpectorPanel.updateFields(params);
+            }
+            inspectorInspect(obj);
         })();
     });
 
@@ -234,5 +305,5 @@ function setupEventListeners(canvas: HTMLCanvasElement) {
     });
 
     // --- Disable context menu on right click ---
-    canvas.addEventListener('contextmenu', (e: any) => e.preventDefault());
+    window.addEventListener('contextmenu', (e: any) => e.preventDefault());
 }
