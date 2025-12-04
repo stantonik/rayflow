@@ -7,19 +7,21 @@
 
 import type { GroupPanelPartInitParameters, IContentRenderer, PanelDimensionChangeEvent } from "dockview-core";
 import { Utils } from "../../utils";
+import { vec3 } from "gl-matrix";
 
-export type InpectorParams = {
-    position: { x: number, y: number, z: number },
-    rotation: { x: number, y: number, z: number },
-    scale: { x: number, y: number, z: number },
-    color: { r: number, g: number, b: number },
+export type InspectorParams = {
+    position: vec3,
+    rotation: vec3,
+    scale: vec3,
+    color: vec3,
 }
 
 export type InspectorFieldType = "xyz" | "color";
 
 export class InspectorPanel implements IContentRenderer {
-    private parameters: InpectorParams;
-    private onFieldChangeCb!: (name: string, type: InspectorFieldType, value: any) => void | null;
+    private _parameters!: InspectorParams | null;
+    get parameters() { return this._parameters; }
+    onFieldChangeCb!: (name: string, type: InspectorFieldType, value: any) => void | null;
 
     private readonly _element: HTMLElement;
     get element() {
@@ -29,32 +31,22 @@ export class InspectorPanel implements IContentRenderer {
     constructor() {
         this._element = document.createElement("div");
         this._element.style.color = "white";
-
-        this.parameters = {
-            position: { x: 0, y: 0, z: 0 },
-            rotation: { x: 0, y: 0, z: 0 },
-            scale: { x: 1, y: 1, z: 1 },
-            color: { r: 255, g: 255, b: 255 },
-        };
-
-        const positionField = this.createField("Position", this.parameters.position, "xyz");
-        const rotationField = this.createField("Rotation", this.parameters.rotation, "xyz");
-        const scaleField = this.createField("Scale", this.parameters.scale, "xyz");
-        const colorField = this.createField("Material", this.parameters.color, "color");
-        this._element.append(positionField, rotationField, scaleField, colorField);
+        this._element.className = "inspector-panel scrollable";
     }
 
     init(params: GroupPanelPartInitParameters): void {
-        params.api.onDidDimensionsChange((_event: PanelDimensionChangeEvent) => {
+        params.params["handler"] = this;
+    }
 
-        });
-
-        params.api.onDidParametersChange(() => {
-            this.onFieldChangeCb = params.api.getParameters()["onFieldChange"] ?? null;
-            params.params["parameters"] = this.parameters;
-        })
-
-        params.params["parameters"] = this.parameters;
+    updateFields(params: InspectorParams | null) {
+        this._parameters = params;
+        this._element.innerHTML = "";
+        if (!params) return;
+        const positionField = this.createField("Position", params.position, "xyz");
+        const rotationField = this.createField("Rotation", params.rotation, "xyz");
+        const scaleField = this.createField("Scale", params.scale, "xyz");
+        const colorField = this.createField("Material", params.color, "color");
+        this._element.append(positionField, rotationField, scaleField, colorField);
     }
 
     private createField(
@@ -76,9 +68,8 @@ export class InspectorPanel implements IContentRenderer {
         paramDiv.className = "inspector-params";
 
         if (type === "xyz") {
-            for (const c of type) {
-                const key = c as keyof typeof linked;
-
+            for (let i = 0; i < type.length; ++i) {
+                const c = type.charAt(i);
                 const wrapper = document.createElement("div");
                 wrapper.className = "inspector-input-wrapper";
 
@@ -90,11 +81,11 @@ export class InspectorPanel implements IContentRenderer {
                 const input = document.createElement("input");
                 input.type = "number";
                 input.name = `${c}Input`;
-                input.value = linked[key]?.toString() ?? "0";
+                input.value = linked[i]?.toString() ?? "0";
                 input.className = "inspector-input";
 
                 input.addEventListener("change", () => {
-                    linked[key] = parseFloat(input.value);
+                    linked[i] = parseFloat(input.value);
                     this.onFieldChangeCb?.(name, type, linked);
                 });
 
@@ -113,14 +104,14 @@ export class InspectorPanel implements IContentRenderer {
             const input = document.createElement("input");
             input.type = "color";
             input.name = `colorInput`;
-            input.value = Utils.rgbToHexStr(linked);
+            input.value = Utils.rgbToHexStr({r:linked[0], g:linked[1], b:linked[2]});
             input.className = "inspector-color-input";
 
             input.addEventListener("change", () => {
                 const rgb = Utils.hexStrToRgb(input.value) ?? { r: 0, g: 0, b: 0 };
-                linked.r = rgb.r;
-                linked.g = rgb.g;
-                linked.b = rgb.b;
+                linked[0] = rgb.r;
+                linked[1] = rgb.g;
+                linked[2] = rgb.b;
                 this.onFieldChangeCb?.(name, type, linked);
             });
 

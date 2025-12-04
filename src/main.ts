@@ -9,15 +9,16 @@ import "./styles/style.css"
 import { vec3 } from "gl-matrix";
 import { RayMarcher } from "./raymarching";
 import { Camera } from "./camera";
-import { Object } from "./object";
+import { Object, PrimitiveType } from "./object";
 import { GizmoRenderer } from "./gizmos";
 import { PanelManager } from "./gui/panel-manager";
-import type { InspectorFieldType } from "./gui/panels/inspector-panel";
+import type { InspectorFieldType, InspectorPanel, InspectorParams } from "./gui/panels/inspector-panel";
 
 const app = document.querySelector("#app")! as HTMLElement;
 
 // --- Panels init ---
 const panelManager = new PanelManager(app);
+const inpectorPanel = panelManager.getPanelParam("Inspector", "handler") as InspectorPanel;
 
 const canvas = panelManager.getPanelParam("Scene", "canvas") as HTMLCanvasElement;
 
@@ -75,20 +76,25 @@ async function start(canvas: HTMLCanvasElement) {
 
     const sphere1 = new Object({ name: "Sphere1" });
     raymarcher.addObject(sphere1);
-    const sphere2 = new Object({ name: "Sphere2", scale: [0.1, 0, 0], position: [2, 0, 0] });
+    const sphere2 = new Object({ name: "Sphere2", primitive: PrimitiveType.SPHERE, scale: [1.0, 1.0, 3.0], position: [2, 0, 0], color: [0, 0.8, 0] });
     raymarcher.addObject(sphere2);
 
-    const onFieldChange = (name: string, _type: InspectorFieldType, value: any): void | null => {
-        if (name === "Position") {
-            sphere1.position = [value.x, value.y, value.z];
-        } else if (name === "Rotation") {
-            sphere1.rotation = [value.x, value.y, value.z];
-        } else if (name === "Scale") {
-            sphere1.scale = [value.x, value.y, value.z];
+    inpectorPanel.onFieldChangeCb = (name: string, _type: InspectorFieldType, value: any): void | null => {
+        const obj = raymarcher.lastIntersectedObj;
+        if (!obj) {
+            return;
         }
-        sphere1.sync();
+        if (name === "Position") {
+            obj.position = value;
+        } else if (name === "Rotation") {
+            obj.rotation = value;
+        } else if (name === "Scale") {
+            obj.scale = value;
+        } else if (name === "Material") {
+            obj.color = [value[0] / 255, value[1] / 255, value[2] / 255];
+        }
+        obj.sync();
     }
-    panelManager.setPanelParam("Inspector", "onFieldChange", onFieldChange);
 
     // --- FRAME LOOP ---
     function frame(t: number) {
@@ -132,15 +138,15 @@ function setupEventListeners(canvas: HTMLCanvasElement) {
     // --- Mouse down ---
     canvas.addEventListener('mousedown', (e: MouseEvent) => {
         const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const x = (e.clientX - rect.left);
+        const y = (e.clientY - rect.top);
 
         if (e.button === 0) isLeftDown = true;
         if (e.button === 2) isRightDown = true;
         lastMouse = [x, y];
 
         raymarcher.updateUniforms({
-            mouse: [e.clientX, e.clientY, 1, 0],
+            mouse: [x, y, 1, 0],
         });
 
         // Add little delay
@@ -148,16 +154,26 @@ function setupEventListeners(canvas: HTMLCanvasElement) {
             await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
             const obj = await raymarcher.checkCollision();
-            if (obj)
+            let params: InspectorParams | null = null;
+            if (obj) {
                 console.log(`intersected object name: ${obj.name}`);
+                params = {
+                    position: obj.position,
+                    rotation: obj.rotation,
+                    scale: obj.scale,
+                    color: [obj.color[0] * 255, obj.color[1] * 255, obj.color[2] * 255],
+                } as InspectorParams;
+            } 
+
+            inpectorPanel.updateFields(params);
         })();
     });
 
     // --- Mouse up ---
     canvas.addEventListener('mouseup', (e: MouseEvent) => {
         const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const x = (e.clientX - rect.left);
+        const y = (e.clientY - rect.top);
 
         if (e.button === 0) isLeftDown = false;
         if (e.button === 2) isRightDown = false;

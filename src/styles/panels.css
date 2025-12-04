@@ -5,6 +5,11 @@
  * Distributed under terms of the MIT license.
  */
 
+.inspector-panel.scrollable {
+    overflow-y: auto;
+    max-height: 100%;
+    width: 100%;
+}
 /* Outer card */
 .inspector-field {
     background-color: #1e1e1e;

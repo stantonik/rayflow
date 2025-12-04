@@ -7,7 +7,7 @@
 
 import { Mesh, type VertexFormat } from "./mesh";
 import raymarchWGSL from "./assets/shaders/raymarch.wgsl?raw"
-import { vec3, type vec2, type vec4 } from "gl-matrix";
+import { type vec2, type vec4 } from "gl-matrix";
 import type { Camera } from "./camera";
 import { Object } from "./object";
 
@@ -16,13 +16,6 @@ export type RaymarchUniforms = {
     mouse?: vec4;
     time?: number;
     deltaTime?: number;
-}
-
-export type RaymarchObject = {
-    position?: vec3;
-    rotation?: vec3;
-    scale?: vec3;
-    color?: vec3;
 }
 
 export class RayMarcher {
@@ -46,6 +39,9 @@ export class RayMarcher {
     private cameraBuffer: GPUBuffer;
 
     private mesh: Mesh;
+
+    private _lastIntersectedObj!: Object | null;
+    get lastIntersectedObj() { return this._lastIntersectedObj; }
 
     constructor(device: GPUDevice, format: GPUTextureFormat, camera: Camera) {
         this.device = device;
@@ -95,8 +91,9 @@ export class RayMarcher {
 
         this.objectHitBuffer = device.createBuffer({
             size: 4,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
         });
+        this.device.queue.writeBuffer(this.objectHitBuffer, 0, Float32Array.from([-1]).buffer);
 
         this.objectHitStagingBuffer = device.createBuffer({
             size: 4,
@@ -161,6 +158,7 @@ export class RayMarcher {
         obj._objectBuffer = this.objectBuffer;
         obj._device = this.device;
         obj._objectBufferIdx = this.objects.length;
+        obj._id = this.objects.length;
 
         this.objects.push(obj);
         const data = new Uint32Array([this.objects.length]);
@@ -173,8 +171,12 @@ export class RayMarcher {
         // TODO
     }
 
-    getObject(name: string): Object | null {
+    getObjectByName(name: string): Object | null {
         return this.objects.find((obj) => obj.name === name) ?? null;
+    }
+    
+    getObjectById(id: number): Object | null {
+        return this.objects.find((obj) => obj.id == id) ?? null;
     }
 
     redeemMemory() {
@@ -226,7 +228,9 @@ export class RayMarcher {
         const dataArr = new Float32Array(data);
         const intersectedId = dataArr[0];
 
-        return intersectedId >= 0 ? this.objects[intersectedId]: null;
+        const obj = intersectedId >= 0 ? this.objects[intersectedId]: null;
+        this._lastIntersectedObj = obj;
+        return obj;
     }
 
     render(pass: GPURenderPassEncoder) {

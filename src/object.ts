@@ -7,18 +7,35 @@
 
 import { vec3 } from "gl-matrix";
 
-type PrimitiveType = "sphere" | "cube";
+export const PrimitiveType = {
+    // Core 3D SDF primitives
+    SPHERE: 0,
+    ELLIPSOID: 0,
+
+    BOX: 1,
+    CUBOID: 1,
+
+    TORUS: 2,
+    CYLINDER: 3,
+    CONE: 4,
+    CAPSULE: 5,
+} as const;
+
+export type PrimitiveType = typeof PrimitiveType[keyof typeof PrimitiveType];
 
 export class Object {
-    readonly id: number;
     name: string;
 
-    static GPU_DATA_SIZE_WPAD_BYTES: number = 64;
+    static GPU_DATA_SIZE_WPAD_BYTES: number = 80;
+    // GPU
     position: vec3;
     rotation: vec3;
     scale: vec3;
     color: vec3;
-    primitive: PrimitiveType | null;
+    _id!: number;
+    primitive: PrimitiveType;
+
+    get id() { return this._id; }
 
     _device!: GPUDevice;
     _objectBuffer!: GPUBuffer;
@@ -30,16 +47,15 @@ export class Object {
         rotation = [0, 0, 0],
         scale = [1, 1, 1],
         color = [1, 1, 1],
-        primitive = null,
+        primitive = PrimitiveType.CUBOID,
     }: {
         name?: string;
         position?: vec3;
         rotation?: vec3;
         scale?: vec3;
         color?: vec3;
-        primitive?: PrimitiveType | null;
+        primitive?: PrimitiveType;
     } = {}) {
-        this.id = 0;
         this.name = name;
 
         // Copy so caller can't mutate shared arrays
@@ -59,6 +75,7 @@ export class Object {
         data.set(this.rotation, 4);
         data.set(this.scale, 8);
         data.set(this.color, 12);
+        data.set([this.primitive, this._id], 16);
         this._device.queue.writeBuffer(
             this._objectBuffer,
             offset,
