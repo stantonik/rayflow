@@ -5,7 +5,6 @@
  * Distributed under terms of the MIT license.
  */
 
-import { Mesh, type VertexFormat } from "./mesh";
 import raymarchWGSL from "./assets/shaders/raymarch.wgsl?raw"
 import { type vec2, type vec4 } from "gl-matrix";
 import type { Camera } from "./camera";
@@ -34,11 +33,10 @@ export class RayMarcher {
     private objectCountBuffer: GPUBuffer;
     private objectHitBuffer: GPUBuffer;
     private objectHitStagingBuffer: GPUBuffer;
+    private vertexBuffer: GPUBuffer;
 
     private camera: Camera;
     private cameraBuffer: GPUBuffer;
-
-    private mesh: Mesh;
 
     private _lastIntersectedObj!: RayObject | null;
     get lastIntersectedObj() { return this._lastIntersectedObj; }
@@ -49,21 +47,28 @@ export class RayMarcher {
         this.lastUniforms = {};
         this.objects = [];
 
-        const vertexFormat: VertexFormat = {
-            stride: 2 * 4,
-            attributes: [
-                { shaderLocation: 0, offset: 0, format: "float32x2" }
-            ]
-        };
+        // Create ray marching display
+        const vertices = new Float32Array([
+            -1, -1, // bottom-left
+            3, -1, // bottom-right
+            -1, 3, // top-left
+        ]);
 
-        const raymarchModule = device.createShaderModule({
-            code: raymarchWGSL
-        });
+        this.vertexBuffer = this.device.createBuffer({
+            size: vertices.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        })
+
+        device.queue.writeBuffer(this.vertexBuffer, 0, vertices, 0, vertices.length);
 
         const vertexLayout: GPUVertexBufferLayout = {
             arrayStride: 2 * 4,
             attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }],
         };
+
+        const raymarchModule = device.createShaderModule({
+            code: raymarchWGSL
+        });
 
         this.pipeline = device.createRenderPipeline({
             layout: "auto",
@@ -72,7 +77,7 @@ export class RayMarcher {
             primitive: { topology: "triangle-strip", cullMode: "none" },
         });
 
-        // Buffers
+        // Uniform & Storage Buffers
         this.uniformBuffer = device.createBuffer({
             size: RayMarcher.UNIFORMS_SIZE_WPAD_BYTES,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -115,19 +120,6 @@ export class RayMarcher {
                 { binding: 3, resource: { buffer: this.objectHitBuffer } },
                 { binding: 4, resource: { buffer: this.cameraBuffer } },
             ],
-        });
-
-        // Create Mesh
-        const vertices = new Float32Array([
-            -1, -1,
-            1, -1,
-            -1, 1,
-            1, 1,
-        ]);
-
-        this.mesh = new Mesh(device, vertices, vertexFormat, {
-            indices: null,
-            label: "fullscreen-quad"
         });
     }
 
@@ -272,13 +264,16 @@ export class RayMarcher {
     }
 
     render(pass: GPURenderPassEncoder) {
+        // Update uniforms
         const camData = new Float32Array(4 * 4 + 4);
         camData.set(this.camera.position, 0);
         camData.set(this.camera.getInvViewProjMatrix(), 4);
         this.device.queue.writeBuffer(this.cameraBuffer, 0, camData);
 
+        // Draw
         pass.setPipeline(this.pipeline);
         pass.setBindGroup(0, this.bindGroup);
-        this.mesh.draw(pass);
+        pass.setVertexBuffer(0, this.vertexBuffer);
+        pass.draw(3);
     }
 }
