@@ -166,7 +166,15 @@ fn sdf_primitive(p: vec3<f32>, primitiveType: u32, scale: vec3<f32>, rotation: v
     var q = p;
 
     // Apply rotation (simple Y rotation for demonstration; can extend to XYZ)
-    q = rotate_y(q, rotation.y);
+    if (rotation.x != 0.0) {
+        q = rotate_x(q, rotation.x / 180.0 * PI);
+    }
+    if (rotation.y != 0.0) {
+        q = rotate_y(q, rotation.y / 180.0 * PI);
+    }
+    if (rotation.z != 0.0) {
+        q = rotate_z(q, rotation.z / 180.0 * PI);
+    }
 
     switch (primitiveType) {
         case 0u: { // SPHERE / ELLIPSOID
