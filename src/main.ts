@@ -32,16 +32,7 @@ const engine = await Engine.create(canvas);
 engine.resize(canvas.width, canvas.height);
 
 // Default object
-const cube = new EngineObject({ name: "Cube", color: [0.2, 0.8, 0.2] });
-engine.addObject(cube);
-hierarchyPanel.addItem({
-    name: cube.name,
-    onClick: itemOnClick,
-    onLeave: itemOnLeave,
-    onContextMenu: itemCtxMenu,
-    data: { objectRef: cube }
-});
-
+addObject(new EngineObject({ name: "Cube", color: [0.2, 0.8, 0.2] }));
 
 // --- Render Loop ---
 const animate = (t: number) => {
@@ -57,14 +48,11 @@ requestAnimationFrame(animate);
 engine.onObjectSelected = (obj) => {
     console.log(`intersected object name: ${obj.name}`);
     const item = hierarchyPanel.itemList.find(item => item.data?.["objectRef"] === obj) ?? null;
-    item?.onClick?.(item);
     hierarchyPanel.activateItem(item);
 }
 
 engine.onObjectUnselected = (obj) => {
     console.log(`unselected : ${obj.name}`);
-    const item = hierarchyPanel.itemList.find(item => item.data?.["objectRef"] === obj) ?? null;
-    item?.onLeave?.(item);
     hierarchyPanel.activateItem(null);
 }
 
@@ -110,6 +98,12 @@ function itemCtxMenu(item: HierarchyItem) {
                 engine.removeObject(item.data?.["objectRef"]);
                 hierarchyPanel.removeItem(item);
             }
+        },
+        {
+            text: `Copy ${item.name}`, callback: () => {
+                const obj = item.data?.["objectRef"] as EngineObject;
+                addObject(obj?.copy());
+            }
         }
     ] as ContextMenu;
 }
@@ -117,22 +111,14 @@ function itemCtxMenu(item: HierarchyItem) {
 function itemOnClick(item: HierarchyItem) {
     const obj = item.data?.["objectRef"] as EngineObject;
     if (obj) {
-        if (item.html) {
-            item.html.style.color = "white";
-        }
-        hierarchyPanel.activateItem(item);
         engine.selectObject(obj);
         inspectorInspect(obj);
     }
 }
 
-function itemOnLeave(item: HierarchyItem) {
-    if (item.html) {
-        item.html.style.color = "";
-        hierarchyPanel.activateItem(null);
-        engine.selectObject(null);
-        inspectorInspect(null);
-    }
+function itemOnLeave() {
+    engine.selectObject(null);
+    inspectorInspect(null);
 }
 
 hierarchyPanel.onContextMenu((): ContextMenu => {
@@ -147,16 +133,9 @@ hierarchyPanel.onContextMenu((): ContextMenu => {
             const obj = new EngineObject({
                 primitive: primitiveValue
             });
-            engine.addObject(obj);
             obj.name = `${formatPrimitiveName(name)}${EngineObject.getCountByType(obj.primitive)}`;
 
-            hierarchyPanel.addItem({
-                name: obj.name,
-                onClick: itemOnClick,
-                onLeave: itemOnLeave,
-                onContextMenu: itemCtxMenu,
-                data: { objectRef: obj }
-            });
+            addObject(obj);
         }
     }));
 
@@ -167,6 +146,22 @@ hierarchyPanel.onContextMenu((): ContextMenu => {
         }
     ];
 });
+
+function addObject(obj: EngineObject) {
+    engine.addObject(obj);
+
+    const item = {
+        name: obj.name,
+        onClick: itemOnClick,
+        onActive: itemOnClick,
+        onLeave: itemOnLeave,
+        onContextMenu: itemCtxMenu,
+        data: { objectRef: obj }
+    };
+
+    hierarchyPanel.addItem(item);
+    hierarchyPanel.activateItem(item);
+}
 
 // --- Disable context menu on right click ---
 window.addEventListener('contextmenu', (e: any) => e.preventDefault());

@@ -20,6 +20,7 @@ export type HierarchyItem = {
     name: string;
     html?: HTMLElement;
     onClick?: (item: HierarchyItem) => void;
+    onActive?: (item: HierarchyItem) => void;
     onLeave?: (item: HierarchyItem) => void;
     onContextMenu?: (item: HierarchyItem, x: number, y: number) => ContextMenu;
     data?: Record<string, any>;
@@ -61,10 +62,7 @@ export class HierarchyPanel extends Panel {
         });
 
         this._element.addEventListener('click', (_) => {
-            if (this._activeItem) {
-                this._activeItem?.onLeave?.(this._activeItem);
-                this._activeItem = null;
-            }
+            this.activateItem(null);
         });
     }
 
@@ -76,7 +74,15 @@ export class HierarchyPanel extends Panel {
     }
 
     activateItem(item: HierarchyItem | null): void {
+        if (this._activeItem?.html) {
+            this._activeItem.html.classList.remove("active");
+            this._activeItem.onLeave?.(this._activeItem);
+        }
         this._activeItem = item;
+        if (item) {
+            if (item.html) item.html.classList.add("active");
+            item.onActive?.(item);
+        }
     }
 
     /**
@@ -88,7 +94,11 @@ export class HierarchyPanel extends Panel {
         li.classList.add('hierarchy-item');
         item.html = li;
 
-        if (item.onClick) li.addEventListener('click', (e) => { e.stopPropagation(); this._activeItem = item; item.onClick!(item); });
+        if (item.onClick) li.addEventListener('click', (e) => { 
+            e.stopPropagation();
+            this.activateItem(item);
+            item.onClick!(item);
+        });
 
         // Right-click
         li.addEventListener('contextmenu', (e) => {

@@ -108,6 +108,10 @@
     font-size: 0.85rem;
 }
 
+.hierarchy-item.active {
+    color: white;
+}
+
 .hierarchy-context-menu-item:hover {
     background-color: #3a3a3a;
 }

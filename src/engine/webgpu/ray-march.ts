@@ -86,7 +86,7 @@ export class RayMarcher {
 
         this.objectBuffer = device.createBuffer({
             size: RayObject.GPU_DATA_SIZE_WPAD_BYTES * 128,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
         });
 
         this.objectCountBuffer = device.createBuffer({
@@ -175,20 +175,39 @@ export class RayMarcher {
 
             // Update GPU buffer: copy last object data to removed spot
             const encoder = this.device.createCommandEncoder();
+
+            const temp = this.device.createBuffer({
+                size: RayObject.GPU_DATA_SIZE_WPAD_BYTES,
+                usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+            });
+
             encoder.copyBufferToBuffer(
-                lastObj._objectBuffer!,
+                this.objectBuffer,
                 lastIdx * RayObject.GPU_DATA_SIZE_WPAD_BYTES,
-                obj._objectBuffer!,
+                temp,
+                0,
+                RayObject.GPU_DATA_SIZE_WPAD_BYTES
+            );
+            encoder.copyBufferToBuffer(
+                temp,
+                0,
+                this.objectBuffer,
                 idx * RayObject.GPU_DATA_SIZE_WPAD_BYTES,
                 RayObject.GPU_DATA_SIZE_WPAD_BYTES
             );
             this.device.queue.submit([encoder.finish()]);
+
+            temp.destroy();
 
             // Update last object's indices
             lastObj._index = idx;
 
             // Replace in CPU array
             this.objects[idx] = lastObj;
+
+            if (this._lastIntersectedObj === lastObj) {
+                this.selectObject(lastObj);
+            }
         }
 
         // Remove last object from CPU array
@@ -198,7 +217,9 @@ export class RayMarcher {
         const data = new Uint32Array([this.objects.length]);
         this.device.queue.writeBuffer(this.objectCountBuffer, 0, data.buffer);
 
-        this.selectObject(null);
+        if (this._lastIntersectedObj === obj) {
+            this.selectObject(null);
+        }
 
         obj.destroy();
     }

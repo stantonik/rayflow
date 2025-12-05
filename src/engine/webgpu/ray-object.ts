@@ -95,6 +95,17 @@ export class RayObject {
         );
     }
 
+    copy(): RayObject {
+        return new RayObject({
+            name: `${this.name}Copy`,
+            position: this.position,
+            rotation: this.rotation,
+            scale: this.scale,
+            color: this.color,
+            primitive: this.primitive
+        })
+    } 
+
     destroy(): void {
         // Clear GPU references
         this._device = undefined;
