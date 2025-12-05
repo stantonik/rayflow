@@ -74,8 +74,19 @@ const itemCtxMenu = (item: HierarchyItem) => {
 const itemOnClick = (item: HierarchyItem) => {
     const obj = item.data?.["objectRef"] as RayObject;
     if (obj) {
+        if (item.html) {
+            item.html.style.color = "white";
+        }
         raymarcher.selectObject(obj);
         inspectorInspect(obj);
+    }
+}
+
+const itemOnLeave = (item: HierarchyItem) => {
+    if (item.html) {
+        item.html.style.color = "";
+        raymarcher.selectObject(null);
+        inspectorInspect(null);
     }
 }
 
@@ -97,6 +108,7 @@ hierarchyPanel.onContextMenu((): ContextMenu => {
             hierarchyPanel.addItem({
                 name: obj.name,
                 onClick: itemOnClick,
+                onLeave: itemOnLeave,
                 onContextMenu: itemCtxMenu,
                 data: { objectRef: obj }
             });
@@ -160,6 +172,7 @@ async function start(canvas: HTMLCanvasElement) {
     hierarchyPanel.addItem({
         name: cube.name,
         onClick: itemOnClick,
+        onLeave: itemOnLeave,
         onContextMenu: itemCtxMenu,
         data: { objectRef: cube }
     });
@@ -229,8 +242,11 @@ function setupEventListeners(canvas: HTMLCanvasElement) {
             const obj = await raymarcher.checkCollision();
             if (obj) {
                 console.log(`intersected object name: ${obj.name}`);
+                const item = hierarchyPanel.itemList.find((item) => item.data?.["objectRef"] == obj) ?? null;
+                hierarchyPanel.activateItem(item);
+            } else {
+                hierarchyPanel.activateItem(null);
             }
-            inspectorInspect(obj);
         })();
     });
 

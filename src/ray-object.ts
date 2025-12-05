@@ -41,7 +41,8 @@ export class RayObject {
 
     _device?: GPUDevice;
     _objectBuffer?: GPUBuffer;
-    _objectBufferIdx?: number;
+    _index?: number;
+    get index() { return this._index; }
 
     constructor({
         name = "",
@@ -75,9 +76,9 @@ export class RayObject {
     }
 
     sync(): void {
-        if (!this._device || !this._objectBuffer || this._objectBufferIdx === undefined) return;
+        if (!this._device || !this._objectBuffer || this._index === undefined) return;
 
-        const offset = this._objectBufferIdx * RayObject.GPU_DATA_SIZE_WPAD_BYTES;
+        const offset = this._index * RayObject.GPU_DATA_SIZE_WPAD_BYTES;
 
         const data = new Float32Array(RayObject.GPU_DATA_SIZE_WPAD_BYTES / 4);
         data.set(this.position, 0);
@@ -98,7 +99,7 @@ export class RayObject {
         // Clear GPU references
         this._device = undefined;
         this._objectBuffer = undefined;
-        this._objectBufferIdx = undefined;
+        this._index = undefined;
 
         // Optional: clear arrays to prevent accidental mutation
         this.position = [0, 0, 0];

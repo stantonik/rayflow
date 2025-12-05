@@ -18,7 +18,9 @@ export type ContextMenu = ContextMenuItem[];
 
 export type HierarchyItem = {
     name: string;
+    html?: HTMLElement;
     onClick?: (item: HierarchyItem) => void;
+    onLeave?: (item: HierarchyItem) => void;
     onContextMenu?: (item: HierarchyItem, x: number, y: number) => ContextMenu;
     data?: Record<string, any>;
     children?: HierarchyItem[];
@@ -26,7 +28,12 @@ export type HierarchyItem = {
 
 export class HierarchyPanel extends Panel {
     private listElement: HTMLElement;
+
+    private _itemList: HierarchyItem[] = [];
+    get itemList() { return this._itemList; }
     private itemsMap: Map<string, HTMLElement> = new Map();
+    private _activeItem: HierarchyItem | null = null;
+    get activeItem() { return this._activeItem; }
 
     /** Panel-wide context menu callback */
     private panelContextMenuCallback?: (item: { name: string }, x: number, y: number) => ContextMenu;
@@ -52,6 +59,13 @@ export class HierarchyPanel extends Panel {
                 this.showContextMenu(menuItems, e.clientX, e.clientY);
             }
         });
+
+        this._element.addEventListener('click', (_) => {
+            if (this._activeItem) {
+                this._activeItem?.onLeave?.(this._activeItem);
+                this._activeItem = null;
+            }
+        });
     }
 
     /**
@@ -61,6 +75,15 @@ export class HierarchyPanel extends Panel {
         this.panelContextMenuCallback = callback;
     }
 
+    activateItem(item: HierarchyItem | null): void {
+        if (!item) {
+            this._activeItem?.onLeave?.(this._activeItem);
+        } else {
+            item?.onClick?.(item);
+        }
+        this._activeItem = item;
+    }
+
     /**
      * Add a hierarchy item
      */
@@ -68,8 +91,9 @@ export class HierarchyPanel extends Panel {
         const li = document.createElement('li');
         li.textContent = item.name;
         li.classList.add('hierarchy-item');
+        item.html = li;
 
-        if (item.onClick) li.addEventListener('click', (e) => { e.stopPropagation(); item.onClick!(item); });
+        if (item.onClick) li.addEventListener('click', (e) => { e.stopPropagation(); this._activeItem = item; item.onClick!(item); });
 
         // Right-click
         li.addEventListener('contextmenu', (e) => {
@@ -84,6 +108,7 @@ export class HierarchyPanel extends Panel {
 
         const container = parentElement ?? this.listElement;
         container.appendChild(li);
+
         this.itemsMap.set(item.name, li);
 
         if (item.children && item.children.length > 0) {
@@ -95,6 +120,8 @@ export class HierarchyPanel extends Panel {
                 this.addItem(child, childList);
             }
         }
+
+        this.itemList.push(item);
     }
 
     /**
@@ -106,6 +133,8 @@ export class HierarchyPanel extends Panel {
             li.remove();               // remove from DOM
             this.itemsMap.delete(item.name); // remove from internal map
         }
+        const index = this.itemList.indexOf(item);
+        if (index > -1) this.itemList.splice(index, 1);
     }
 
     /**
