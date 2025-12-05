@@ -235,7 +235,7 @@ fn get_dist_obj(p: vec3<f32>) -> SDFResult {
             res.dist = d;
             res.idx = f32(i);
             res.color = obj.color;
-            if obj.id == objectHitBuffer[0] {
+            if f32(i) == objectHitBuffer[0] {
                 res.color = mix(res.color, vec3<f32>(1.0, 0.0, 0.0), 0.4);
             }
         }

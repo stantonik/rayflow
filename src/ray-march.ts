@@ -123,8 +123,8 @@ export class RayMarcher {
         });
     }
 
-    selectObject(obj: RayObject): void {
-        this.device.queue.writeBuffer(this.objectHitBuffer, 0, Float32Array.from([obj.id]).buffer);
+    selectObject(obj: RayObject | null): void {
+        this.device.queue.writeBuffer(this.objectHitBuffer, 0, Float32Array.from([obj?._index ?? -1]).buffer);
         this._lastIntersectedObj = obj;
     }
 
@@ -154,7 +154,7 @@ export class RayMarcher {
         // TODO: Validate obj
         obj._objectBuffer = this.objectBuffer;
         obj._device = this.device;
-        obj._objectBufferIdx = this.objects.length;
+        obj._index = this.objects.length;
 
         this.objects.push(obj);
         const data = new Uint32Array([this.objects.length]);
@@ -164,7 +164,7 @@ export class RayMarcher {
     }
 
     removeObject(obj: RayObject): void {
-        const idx = obj._objectBufferIdx;
+        const idx = obj._index;
         if (idx === undefined || idx < 0 || idx >= this.objects.length) return;
 
         const lastIdx = this.objects.length - 1;
@@ -185,7 +185,7 @@ export class RayMarcher {
             this.device.queue.submit([encoder.finish()]);
 
             // Update last object's indices
-            lastObj._objectBufferIdx = idx;
+            lastObj._index = idx;
 
             // Replace in CPU array
             this.objects[idx] = lastObj;
