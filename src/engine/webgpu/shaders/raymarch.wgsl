@@ -103,11 +103,12 @@ fn sd_torus(p: vec3<f32>, t: vec2<f32>) -> f32 {
     return length(q) - t.y;
 }
 
-fn sd_cylinder(p: vec3<f32>, radius: f32) -> f32 {
-    return length(p.xz) - radius;
+fn sd_cylinder(p: vec3<f32>, r: f32, h: f32) -> f32 {
+    let d = abs(vec2<f32>(length(p.xz), p.y)) - vec2<f32>(r, h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, vec2<f32>(0.0, 0.0)));
 }
 
-fn sd_cone_simple(p: vec3<f32>, r: f32, h: f32) -> f32 {
+fn sd_cone(p: vec3<f32>, r: f32, h: f32) -> f32 {
     // c = normalize( vec2(h, r) )
     let hh = h * 2.0;
     let invLen = inverseSqrt(hh * hh + r * r);
@@ -191,10 +192,10 @@ fn sdf_primitive(p: vec3<f32>, primitiveType: u32, scale: vec3<f32>, rotation: v
             return sd_torus(q, vec2<f32>(scale.x, scale.y));
         }
         case 3u: { // CYLINDER
-            return sd_cylinder(q, scale.x);
+            return sd_cylinder(q, scale.x, scale.y);
         }
         case 4u: { // CONE
-            return sd_cone_simple(q, scale.x, scale.y);
+            return sd_cone(q, scale.x, scale.y);
         }
         case 5u: { // CAPSULE
             let a = vec3<f32>(0.0, -scale.y * 0.5, 0.0);
@@ -276,7 +277,7 @@ fn get_dist_gizmo(p: vec3<f32>) -> SDFResult {
 
     // --- X axis ---
     let x_cone_pos = vec3<f32>(s.x + cone_h, 0.0, 0.0);
-    var d = sd_cone_simple(rotate_z(q - x_cone_pos, PI / 2.0), cone_dia, cone_h);
+    var d = sd_cone(rotate_z(q - x_cone_pos, PI / 2.0), cone_dia, cone_h);
     if d < res.dist {
         res.dist = d;
         res.color = x_color;
@@ -291,7 +292,7 @@ fn get_dist_gizmo(p: vec3<f32>) -> SDFResult {
 
     // --- Y axis ---
     let y_cone_pos = vec3<f32>(0.0, s.y + cone_h, 0.0);
-    d = sd_cone_simple(q - y_cone_pos, cone_dia, cone_h);
+    d = sd_cone(q - y_cone_pos, cone_dia, cone_h);
     if d < res.dist {
         res.dist = d;
         res.color = y_color;
@@ -306,7 +307,7 @@ fn get_dist_gizmo(p: vec3<f32>) -> SDFResult {
 
     // --- Z axis ---
     let z_cone_pos = vec3<f32>(0.0, 0.0, s.z + cone_h);
-    d = sd_cone_simple(rotate_x(q - z_cone_pos, -PI / 2.0), cone_dia, cone_h);
+    d = sd_cone(rotate_x(q - z_cone_pos, -PI / 2.0), cone_dia, cone_h);
     if d < res.dist {
         res.dist = d;
         res.color = z_color;
