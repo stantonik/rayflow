@@ -76,11 +76,6 @@ export class HierarchyPanel extends Panel {
     }
 
     activateItem(item: HierarchyItem | null): void {
-        if (!item) {
-            this._activeItem?.onLeave?.(this._activeItem);
-        } else {
-            item?.onClick?.(item);
-        }
         this._activeItem = item;
     }
 

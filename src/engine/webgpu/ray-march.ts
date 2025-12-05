@@ -5,7 +5,7 @@
  * Distributed under terms of the MIT license.
  */
 
-import raymarchWGSL from "./assets/shaders/raymarch.wgsl?raw"
+import raymarchWGSL from "./shaders/raymarch.wgsl?raw"
 import { type vec2, type vec4 } from "gl-matrix";
 import type { Camera } from "./camera";
 import { RayObject } from "./ray-object";
@@ -197,6 +197,8 @@ export class RayMarcher {
         // Update objectCountBuffer
         const data = new Uint32Array([this.objects.length]);
         this.device.queue.writeBuffer(this.objectCountBuffer, 0, data.buffer);
+
+        this.selectObject(null);
 
         obj.destroy();
     }
