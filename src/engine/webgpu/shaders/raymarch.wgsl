@@ -67,6 +67,11 @@ struct SDFResult {
 const MAX_DIST: f32 = 100.0;
 const SURF_DIST: f32 = 0.001;
 const MAX_STEPS: i32 = 256;
+
+const MAX_DIST_PICK: f32 = 40.0;
+const SURF_DIST_PICK: f32 = 0.1;
+const MAX_STEPS_PICK: i32 = 64;
+
 const PI: f32 = 3.14159265359;
 
 const MAT_OBJ = 0.0;
@@ -214,7 +219,7 @@ fn sdf_primitive(p: vec3<f32>, primitiveType: u32, scale: vec3<f32>, rotation: v
 }
 
 
-fn sd_grid_2D(p: vec3<f32>, thickness: f32, tile_size: f32) -> f32 {
+fn sd_grid_2D(p: vec3<f32>, thickness: f32, tile_size: f32, width: f32, height: f32) -> f32 {
     var q = p;
     q.x = q.x - tile_size * floor(q.x / tile_size + 0.5);
     q.z = q.z - tile_size * floor(q.z / tile_size + 0.5);
@@ -395,7 +400,7 @@ fn get_dist_grid(p: vec3<f32>) -> SDFResult {
     res.idx = -1.0;
 
     // ----- GRID -----
-    let gd = sd_grid_2D(p, GRID_LINE_WIDTH, 1.0);
+    let gd = sd_grid_2D(p, GRID_LINE_WIDTH, 1.0, 20.0, 20.0);
     if gd < res.dist {
         res.dist = gd;
         res.idx = -1.0;
@@ -481,23 +486,22 @@ fn get_normal(p: vec3<f32>) -> vec3<f32> {
 fn pick(ro: vec3<f32>, rd: vec3<f32>) -> vec2<f32> {
     var t = 0.0;
 
-    for (var i = 0; i < MAX_STEPS; i++) {
+    for (var i = 0; i < MAX_STEPS_PICK; i++) {
         let p = ro + rd * t;
         var s = get_dist_obj(p);
 
         if uniforms.activeObjIdx >= 0.0 {
             let q = get_dist_gizmo_arrow(p);
-            // if q.dist < MAX_DIST {
-            if q.dist < s.dist {
+            if q.dist < MAX_DIST {
                 s = q;
             } 
         }
 
         t += s.dist;
-        if s.dist < SURF_DIST {
+        if s.dist < SURF_DIST_PICK {
             return vec2<f32>(s.mat, s.idx);
         }
-        if t > MAX_DIST {
+        if t > MAX_DIST_PICK {
             break;
         }
     }
@@ -516,7 +520,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
     let uv = fragCoord.xy * 2.0 / uniforms.resolution.xy - 1.0;
 
     // Mouse picking ray
-    if i32(fragCoord.x) == i32(uniforms.mouse.x) && i32(fragCoord.y) == i32(uniforms.mouse.y) && u32(uniforms.picking) == 1u {
+    if i32(fragCoord.x) < i32(uniforms.mouse.x) && i32(fragCoord.y) == i32(uniforms.mouse.y) && u32(uniforms.picking) == 1u {
         let ndc = vec4(
             (uniforms.mouse.x * 2.0 / uniforms.resolution.x - 1.0),
             -(uniforms.mouse.y * 2.0 / uniforms.resolution.y - 1.0),

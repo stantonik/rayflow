@@ -122,6 +122,8 @@ export class RayMarcher {
             mappedAtCreation: false,
         });
 
+        // Bind Group   
+
         this.bindGroup = device.createBindGroup({
             layout: this.pipeline.getBindGroupLayout(0),
             entries: [

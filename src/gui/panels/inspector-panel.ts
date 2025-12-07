@@ -84,9 +84,21 @@ export class InspectorPanel extends Panel {
                 input.value = linked[i]?.toFixed(2).toString() ?? "0";
                 input.className = "inspector-input";
 
-                input.addEventListener("change", () => {
-                    linked[i] = parseFloat(input.value);
+                input.addEventListener("input", () => {
+                    if (input.value.length == 0) {
+                        return;
+                    }
+
+                    linked[i] = parseFloat(input.value) ?? 0;
                     this.onFieldChangeCb?.(name, type, linked);
+                });
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        if (input.value.length == 0) {
+                            input.value = `${(0).toFixed(2)}`;
+                        }
+                    }
                 });
 
                 label.appendChild(input);

@@ -74,7 +74,7 @@ inpectorPanel.onFieldChangeCb = (name: string, _type: InspectorFieldType, value:
     } else if (name === "Rotation") {
         obj.rotation = value;
     } else if (name === "Scale") {
-        obj.scale = value;
+        obj.scale = (value as [number, number, number]).map((x) => Math.abs(x));
     } else if (name === "Material") {
         obj.color = [value[0] / 255, value[1] / 255, value[2] / 255];
     }
