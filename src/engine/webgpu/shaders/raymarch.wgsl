@@ -61,7 +61,6 @@ struct SDFResult {
     dist: f32,
     mat: f32,
     idx: f32,
-    color: vec3<f32>,
 };
 
 // -------------------------------------------------------------
@@ -71,10 +70,13 @@ const MAX_STEPS: i32 = 256;
 const PI: f32 = 3.14159265359;
 
 const MAT_OBJ = 0.0;
-const MAT_GIZMO = 1.0;
-const MAT_GRID = 2.0;
+const MAT_GIZMO_ARROW = 1.0;
+const MAT_GIZMO = 2.0;
+const MAT_GRID = 3.0;
 
-const MAT_SKY_COLOR: vec3<f32> = vec3(0.25, 0.25, 0.25);
+const MAT_SKY_COLOR: vec3<f32> = vec3(0.15, 0.15, 0.20);
+
+const GRID_LINE_WIDTH = 0.018;
 
 // -------------------------------------------------------------
 // Helpers
@@ -226,6 +228,48 @@ fn sd_grid_2D(p: vec3<f32>, thickness: f32, tile_size: f32) -> f32 {
     return max(min(dX, dZ), abs(q.y));
 }
 
+fn get_material_color(p: vec3<f32>, res: SDFResult) -> vec3<f32> {
+    var color: vec3<f32>;
+
+    if res.mat == MAT_OBJ {
+        let idx = i32(res.idx);
+        let obj = objects[idx];
+        color = obj.color;
+        // Highlight selected obj
+        if (idx == i32(uniforms.activeObjIdx)) {
+            color = mix(color, vec3<f32>(1.0, 0.0, 0.0), 0.4);
+        }
+    } else if res.mat == MAT_GRID {
+        let modx = abs(p.x - 10.0 * floor(p.x / 10.0 + 0.5));
+        let modz = abs(p.z - 10.0 * floor(p.z / 10.0 + 0.5));
+
+        if abs(p.z) < GRID_LINE_WIDTH {
+            color = vec3(1.0, 0.0, 0.0);
+        } else if abs(p.x) < GRID_LINE_WIDTH {
+            color = vec3(0.0, 0.0, 1.0);
+        } else if modx < GRID_LINE_WIDTH || modz < GRID_LINE_WIDTH {
+            color = vec3(0.31) * 0.3;
+        } else {
+            color = vec3(0.2);
+        }
+    } else if res.mat == MAT_GIZMO || res.mat == MAT_GIZMO_ARROW {
+        let axe = u32(res.idx);
+        if axe == 0u {
+            color = vec3<f32>(1.0, 0.0, 0.0);
+        } else if axe == 1u {
+            color = vec3<f32>(0.0, 1.0, 0.0);
+        } else if axe == 2u {
+            color = vec3<f32>(0.0, 0.0, 1.0);
+        }
+        // Highlight hovered arrow
+        if res.mat == MAT_GIZMO_ARROW && objectHitBuffer[0].x == 1.0 && axe == u32(objectHitBuffer[1].y) {
+            color = mix(color, vec3<f32>(0.0), 0.5);
+        }
+    }
+
+    return color;
+}
+
 // -------------------------------------------------------------
 // OBJECT DISTANCE (with object color)
 // -------------------------------------------------------------
@@ -234,7 +278,6 @@ fn get_dist_obj(p: vec3<f32>) -> SDFResult {
     res.dist = MAX_DIST;
     res.mat = -1.0;
     res.idx = -1.0;
-    res.color = vec3(0.0);
 
     for (var i: u32 = 0u; i < objectCount; i++) {
         let obj = objects[i];
@@ -246,11 +289,7 @@ fn get_dist_obj(p: vec3<f32>) -> SDFResult {
         if d < res.dist {
             res.dist = d;
             res.idx = f32(i);
-            res.color = obj.color;
             res.mat = MAT_OBJ;
-            if f32(i) == uniforms.activeObjIdx {
-                res.color = mix(res.color, vec3<f32>(1.0, 0.0, 0.0), 0.4);
-            }
         }
     }
 
@@ -260,16 +299,12 @@ fn get_dist_obj(p: vec3<f32>) -> SDFResult {
 fn get_dist_gizmo_arrow(p: vec3<f32>) -> SDFResult {
     var res: SDFResult;
     res.dist = MAX_DIST;
-    res.mat = MAT_GIZMO;
+    res.mat = MAT_GIZMO_ARROW;
 
     if uniforms.activeObjIdx < 0.0 {
         return res;
     }
     let trackedObj = objects[u32(uniforms.activeObjIdx)];
-
-    let x_color = vec3<f32>(1.0, 0.0, 0.0);
-    let y_color = vec3<f32>(0.0, 0.0, 1.0);
-    let z_color = vec3<f32>(0.0, 1.0, 0.0);
 
     let q = p - trackedObj.position;
     let s = trackedObj.scale * 1.2;
@@ -284,7 +319,6 @@ fn get_dist_gizmo_arrow(p: vec3<f32>) -> SDFResult {
     var d = sd_cone(rotate_z(q - x_cone_pos, PI / 2.0), cone_dia, cone_h);
     if d < res.dist {
         res.dist = d;
-        res.color = x_color;
         res.idx = 0.0;
     }
 
@@ -293,7 +327,6 @@ fn get_dist_gizmo_arrow(p: vec3<f32>) -> SDFResult {
     d = sd_cone(q - y_cone_pos, cone_dia, cone_h);
     if d < res.dist {
         res.dist = d;
-        res.color = y_color;
         res.idx = 1.0;
     }
 
@@ -302,7 +335,6 @@ fn get_dist_gizmo_arrow(p: vec3<f32>) -> SDFResult {
     d = sd_cone(rotate_x(q - z_cone_pos, -PI / 2.0), cone_dia, cone_h);
     if d < res.dist {
         res.dist = d;
-        res.color = z_color;
         res.idx = 2.0;
     }
 
@@ -319,10 +351,6 @@ fn get_dist_gizmo(p: vec3<f32>) -> SDFResult {
     }
     let trackedObj = objects[u32(uniforms.activeObjIdx)];
 
-    let x_color = vec3<f32>(1.0, 0.0, 0.0);
-    let y_color = vec3<f32>(0.0, 0.0, 1.0);
-    let z_color = vec3<f32>(0.0, 1.0, 0.0);
-
     let q = p - trackedObj.position;
     let s = trackedObj.scale * 1.2;
 
@@ -333,7 +361,7 @@ fn get_dist_gizmo(p: vec3<f32>) -> SDFResult {
     var d = sd_capsule(q, vec3<f32>(0.0, 0.0, 0.0), x_end_pos, line_r);
     if d < res.dist {
         res.dist = d;
-        res.color = x_color;
+        res.idx = 0.0;
     }
 
     // Y line
@@ -341,7 +369,7 @@ fn get_dist_gizmo(p: vec3<f32>) -> SDFResult {
     d = sd_capsule(q, vec3<f32>(0.0, 0.0, 0.0), y_end_pos, line_r);
     if d < res.dist {
         res.dist = d;
-        res.color = y_color;
+        res.idx = 1.0;
     }
 
     // Z line
@@ -349,13 +377,29 @@ fn get_dist_gizmo(p: vec3<f32>) -> SDFResult {
     d = sd_capsule(q, vec3<f32>(0.0, 0.0, 0.0), z_end_pos, line_r);
     if d < res.dist {
         res.dist = d;
-        res.color = z_color;
+        res.idx = 2.0;
     }
 
     let c = get_dist_gizmo_arrow(p);
     if c.dist < res.dist {
-        res.dist = c.dist;
-        res.color = c.color;
+        res = c;
+    }
+
+    return res;
+}
+
+fn get_dist_grid(p: vec3<f32>) -> SDFResult {
+    var res: SDFResult;
+    res.dist = MAX_DIST;
+    res.mat = -1.0;
+    res.idx = -1.0;
+
+    // ----- GRID -----
+    let gd = sd_grid_2D(p, GRID_LINE_WIDTH, 1.0);
+    if gd < res.dist {
+        res.dist = gd;
+        res.idx = -1.0;
+        res.mat = MAT_GRID;
     }
 
     return res;
@@ -370,28 +414,11 @@ fn get_dist(p: vec3<f32>) -> SDFResult {
     res.dist = MAX_DIST;
     res.mat = -1.0;
     res.idx = -1.0;
-    res.color = vec3(0.0);
 
     // ----- GRID -----
-    let gd = sd_grid_2D(p, 0.025, 1.0);
-    if gd < res.dist {
-        res.dist = gd;
-        res.idx = -1.0;
-        res.mat = MAT_GRID;
-
-        // Reproduce your grid color logic:
-        let modx = abs(p.x - 10.0 * floor(p.x / 10.0 + 0.5));
-        let modz = abs(p.z - 10.0 * floor(p.z / 10.0 + 0.5));
-
-        if abs(p.z) < 0.025 {
-            res.color = vec3(1.0, 0.0, 0.0);
-        } else if abs(p.x) < 0.025 {
-            res.color = vec3(0.0, 1.0, 0.0);
-        } else if modx < 0.025 || modz < 0.025 {
-            res.color = vec3(0.31) * 0.4;
-        } else {
-            res.color = vec3(0.31);
-        }
+    let g = get_dist_grid(p);
+    if g.dist < res.dist {
+        res = g;
     }
 
     // ----- OBJECTS -----
@@ -413,7 +440,6 @@ fn ray_march(ro: vec3<f32>, rd: vec3<f32>, mode: u32) -> SDFResult {
     res.dist = MAX_DIST;
     res.idx = -1.0;
     res.mat = -1.0;
-    res.color = vec3(0.0);
 
     for (var i = 0; i < MAX_STEPS; i++) {
         let p = ro + rd * total;
@@ -421,8 +447,10 @@ fn ray_march(ro: vec3<f32>, rd: vec3<f32>, mode: u32) -> SDFResult {
 
         if mode == 0u {
             s = get_dist(p);
-        } else {
+        } else if mode == 1u {
             s = get_dist_gizmo(p);
+        } else if mode == 2u {
+            s = get_dist_obj(p);
         }
 
         total += s.dist;
@@ -459,9 +487,10 @@ fn pick(ro: vec3<f32>, rd: vec3<f32>) -> vec2<f32> {
 
         if uniforms.activeObjIdx >= 0.0 {
             let q = get_dist_gizmo_arrow(p);
+            // if q.dist < MAX_DIST {
             if q.dist < s.dist {
                 s = q;
-            }
+            } 
         }
 
         t += s.dist;
@@ -487,7 +516,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
     let uv = fragCoord.xy * 2.0 / uniforms.resolution.xy - 1.0;
 
     // Mouse picking ray
-    if u32(uniforms.picking) == 1u {
+    if i32(fragCoord.x) == i32(uniforms.mouse.x) && i32(fragCoord.y) == i32(uniforms.mouse.y) && u32(uniforms.picking) == 1u {
         let ndc = vec4(
             (uniforms.mouse.x * 2.0 / uniforms.resolution.x - 1.0),
             -(uniforms.mouse.y * 2.0 / uniforms.resolution.y - 1.0),
@@ -527,24 +556,26 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
         let hit_pos = ro + rd * dist;
         let normal = get_normal(hit_pos);
 
-        var color = hit.color;
+        var color = get_material_color(hit_pos, hit);
 
         if hit.mat != MAT_GRID {
-        // Lighting
+            // Lighting
             let light_pos = vec3(100.0, 100.0, -100.0);
             let light_dir = normalize(light_pos - hit_pos);
             let diffuse = max(dot(normal, light_dir), 0.0);
 
-        // Shadow
-            let shadow_pos = hit_pos + normal * 0.01;
-            let shadow = select(0.3, 1.0, ray_march(shadow_pos, light_dir, 0u).dist > length(light_pos - shadow_pos));
+            let ambient = 0.5;
+            let albedo = color;
 
-            let ambient = 0.2;
-            let albedo = hit.color;
+            // Shadow
+            let shadow_pos = hit_pos + normal * 0.01;
+            // let shadow = select(0.3, 1.0, ray_march(shadow_pos, light_dir, 0u).dist > length(light_pos - shadow_pos));
+            let shadow = select(1.0, ambient, ray_march(shadow_pos, light_dir, 2u).dist < MAX_DIST);
+
 
             let shaded = albedo * (ambient + diffuse * shadow * 0.8);
 
-        // Fog
+            // Fog
             let fog = exp(-dist * 0.005);
             color = mix(MAT_SKY_COLOR, shaded, fog);
         }

@@ -39,9 +39,11 @@ export class RayMarcher {
     private objects: RayObject[];
     private objectBuffer: GPUBuffer;
     private objectCountBuffer: GPUBuffer;
+    private vertexBuffer: GPUBuffer;
+
+    private collisionPending: boolean;
     private objectHitBuffer: GPUBuffer;
     private objectHitStagingBuffer: GPUBuffer;
-    private vertexBuffer: GPUBuffer;
 
     private camera: Camera;
     private cameraBuffer: GPUBuffer;
@@ -54,6 +56,7 @@ export class RayMarcher {
         this.camera = camera;
         this.lastUniforms = {};
         this.objects = [];
+        this.collisionPending = false;
 
         // Create ray marching display
         const vertices = new Float32Array([
@@ -270,6 +273,9 @@ export class RayMarcher {
     }
 
     async checkCollision(): Promise<IntersectItem | null> {
+        if (this.collisionPending) return null;
+        this.collisionPending = true;
+
         const encoder = this.device.createCommandEncoder();
         encoder.copyBufferToBuffer(
             this.objectHitBuffer,
@@ -279,11 +285,17 @@ export class RayMarcher {
             8
         );
         this.device.queue.submit([encoder.finish()]);
+
+        await this.device.queue.onSubmittedWorkDone()
+
         await this.objectHitStagingBuffer.mapAsync(GPUMapMode.READ, 0, 8);
 
         const copyArrayBuffer = this.objectHitStagingBuffer.getMappedRange(0, 8);
         const data = copyArrayBuffer.slice();
         this.objectHitStagingBuffer.unmap();
+
+        this.collisionPending = false;
+
         const dataArr = new Float32Array(data);
         const type = dataArr[0];
         const intersectedId = dataArr[1];

@@ -133,8 +133,8 @@ export class Engine {
         // --- Mouse up ---
         canvas.addEventListener('mouseup', async (e: MouseEvent) => {
             const { x, y } = getMousePos(e);
-            if (e.button === 0) isLeftDown = false;
-            if (e.button === 2) isRightDown = false;
+            isLeftDown = false;
+            isRightDown = false;
             const dx = x - lastMouseOnClick[0];
             const dy = y - lastMouseOnClick[1];
             if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
@@ -156,9 +156,10 @@ export class Engine {
 
             this.raymarcher.updateUniforms({ mouse: [x, y, 0, 0] });
         });
-        window.addEventListener('mouseup', async (e: MouseEvent) => {
-            if (e.button === 0) isLeftDown = false;
-            if (e.button === 2) isRightDown = false;
+
+        window.addEventListener('mouseup', () => {
+            isLeftDown = false;
+            isRightDown = false;
         });
 
         // --- Mouse move ---
@@ -178,15 +179,21 @@ export class Engine {
 
             if (isLeftDown) {
                 if (gizmoAxe !== null && this._activeObject) {
-                    const distance = vec3.dist(this._activeObject.position, this.camera.position);
-                    const delta = [-dx / canvas.width, dy / canvas.height, 0] as vec3;
-                    delta[2] = -delta[0];
-                    // vec3.normalize(delta, delta);
-                    vec3.scale(delta, delta, distance);
-                    // const dot = vec3.dot(this.camera.position, delta);
-                    // vec3.scale(delta, delta, dot);
+                    // 1. Mouse delta in normalized screen space
+                    const delta = vec3.fromValues(dx / canvas.width, -dy / canvas.height, 0);
 
-                    this._activeObject.position[gizmoAxe] -= delta[gizmoAxe];
+                    // 2. Scale by distance and optional sensitivity
+                    const distance = vec3.dist(this._activeObject.position, this.camera.position);
+                    vec3.scale(delta, delta, distance);
+
+                    // 3. Convert to world space
+                    const worldDelta = vec3.create();
+                    vec3.scaleAndAdd(worldDelta, worldDelta, this.camera.right, delta[0]);
+                    vec3.scaleAndAdd(worldDelta, worldDelta, this.camera.up, delta[1]);
+                    vec3.scaleAndAdd(worldDelta, worldDelta, this.camera.forward, delta[0]);
+
+                    // 4. Apply movement along the gizmo axis
+                    this._activeObject.position[gizmoAxe] += worldDelta[gizmoAxe];
                     this._activeObject.sync();
                     this.onObjectEdited?.(this._activeObject);
                 } else {
@@ -218,6 +225,11 @@ export class Engine {
 
                 this.camera.updateMatrices();
             }
+        });
+
+        document.addEventListener("mouseleave", () => {
+            isLeftDown = false;
+            isRightDown = false;
         });
 
         // --- Wheel (zoom) ---

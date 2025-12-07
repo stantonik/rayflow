@@ -33,7 +33,7 @@ engine.resize(canvas.width, canvas.height);
 engine.setPicking(true);
 
 // Default object
-addObject(new EngineObject({ name: "Cube", color: [0.2, 0.8, 0.2] }));
+addObject(new EngineObject({ name: "Cube", color: [0.2, 0.8, 0.2] }), false);
 
 // --- Render Loop ---
 const animate = (t: number) => {
@@ -101,6 +101,9 @@ function itemCtxMenu(item: HierarchyItem) {
         {
             text: `Remove ${item.name}`, callback: () => {
                 engine.removeObject(item.data?.["objectRef"]);
+                if (hierarchyPanel.activeItem === item) {
+                    inspectorInspect(null);
+                }
                 hierarchyPanel.removeItem(item);
             }
         },
@@ -159,7 +162,7 @@ hierarchyPanel.onContextMenu((): ContextMenu => {
     ];
 });
 
-function addObject(obj: EngineObject) {
+function addObject(obj: EngineObject, active: boolean = true) {
     engine.addObject(obj);
 
     const item = {
@@ -172,7 +175,7 @@ function addObject(obj: EngineObject) {
     };
 
     hierarchyPanel.addItem(item);
-    hierarchyPanel.activateItem(item);
+    if (active) hierarchyPanel.activateItem(item);
 }
 
 // --- Disable context menu on right click ---

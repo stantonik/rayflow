@@ -26,15 +26,22 @@ export class InspectorPanel extends Panel {
         super();
 
         this._element.classList.add('inspector-panel', 'scrollable');
+        this.updateFields(null);
     }
 
     // Callbacks
     onFieldChangeCb!: (name: string, type: InspectorFieldType, value: any) => void | null;
 
-    updateFields(params: InspectorParams | null) {
+    updateFields(params: InspectorParams | null) {
         this._parameters = params;
         this._element.innerHTML = "";
-        if (!params) return;
+        if (!params) {
+            const placeHolder = document.createElement("div");
+            placeHolder.textContent = "No object selected";
+            placeHolder.classList.add("placeholder");
+            this._element.appendChild(placeHolder);
+            return;
+        }
         const positionField = this.createField("Position", params.position, "xyz");
         const rotationField = this.createField("Rotation", params.rotation, "xyz");
         const scaleField = this.createField("Scale", params.scale, "xyz");
@@ -68,13 +75,13 @@ export class InspectorPanel extends Panel {
 
                 const label = document.createElement("label");
                 label.textContent = c.toUpperCase();
-                label.setAttribute("for", `${c}Input`);
                 label.className = "inspector-label";
 
                 const input = document.createElement("input");
                 input.type = "number";
+                input.step = "0.1";
                 input.name = `${c}Input`;
-                input.value = linked[i]?.toString() ?? "0";
+                input.value = linked[i]?.toFixed(2).toString() ?? "0";
                 input.className = "inspector-input";
 
                 input.addEventListener("change", () => {
@@ -82,7 +89,8 @@ export class InspectorPanel extends Panel {
                     this.onFieldChangeCb?.(name, type, linked);
                 });
 
-                wrapper.append(label, input);
+                label.appendChild(input);
+                wrapper.appendChild(label);
                 paramDiv.appendChild(wrapper);
             }
         } else if (type === "color") {
@@ -91,13 +99,12 @@ export class InspectorPanel extends Panel {
 
             const label = document.createElement("label");
             label.textContent = "Color";
-            label.setAttribute("for", `colorInput`);
             label.className = "inspector-label";
 
             const input = document.createElement("input");
             input.type = "color";
             input.name = `colorInput`;
-            input.value = Utils.rgbToHexStr({r:linked[0], g:linked[1], b:linked[2]});
+            input.value = Utils.rgbToHexStr({ r: linked[0], g: linked[1], b: linked[2] });
             input.className = "inspector-color-input";
 
             input.addEventListener("input", () => {
@@ -108,7 +115,8 @@ export class InspectorPanel extends Panel {
                 this.onFieldChangeCb?.(name, type, linked);
             });
 
-            wrapper.append(label, input);
+            label.appendChild(input);
+            wrapper.appendChild(label);
             paramDiv.appendChild(wrapper);
         }
 

@@ -28,7 +28,7 @@ export type HierarchyItem = {
 };
 
 export class HierarchyPanel extends Panel {
-    private listElement: HTMLElement;
+    private listElement!: HTMLElement;
 
     private _itemList: HierarchyItem[] = [];
     get itemList() { return this._itemList; }
@@ -43,10 +43,6 @@ export class HierarchyPanel extends Panel {
         super();
 
         this._element.classList.add('hierarchy-panel', 'scrollable');
-
-        this.listElement = document.createElement('ul');
-        this.listElement.classList.add('hierarchy-list');
-        this._element.appendChild(this.listElement);
 
         // Panel-wide right click (on empty space)
         this._element.addEventListener('contextmenu', (e) => {
@@ -64,6 +60,8 @@ export class HierarchyPanel extends Panel {
         this._element.addEventListener('click', (_) => {
             this.activateItem(null);
         });
+
+        this.showPlaceholder();
     }
 
     /**
@@ -89,12 +87,19 @@ export class HierarchyPanel extends Panel {
      * Add a hierarchy item
      */
     addItem(item: HierarchyItem, parentElement?: HTMLElement) {
+        if (this.itemList.length == 0) {
+            this._element.innerHTML = "";
+            this.listElement = document.createElement('ul');
+            this.listElement.classList.add('hierarchy-list');
+            this._element.appendChild(this.listElement);
+        }
+
         const li = document.createElement('li');
         li.textContent = item.name;
         li.classList.add('hierarchy-item');
         item.html = li;
 
-        if (item.onClick) li.addEventListener('click', (e) => { 
+        if (item.onClick) li.addEventListener('click', (e) => {
             e.stopPropagation();
             this.activateItem(item);
             item.onClick!(item);
@@ -140,6 +145,18 @@ export class HierarchyPanel extends Panel {
         }
         const index = this.itemList.indexOf(item);
         if (index > -1) this.itemList.splice(index, 1);
+        if (this.itemList.length == 0) {
+            this.showPlaceholder();
+        }
+    }
+
+    private showPlaceholder() {
+        this._element.innerHTML = "";
+        const placeHolder = document.createElement("div");
+        placeHolder.textContent = "Scene is empty";
+        placeHolder.classList.add("placeholder");
+        this._element.appendChild(placeHolder);
+        return;
     }
 
     /**
