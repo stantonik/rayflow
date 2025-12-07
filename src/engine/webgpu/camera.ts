@@ -72,6 +72,26 @@ export class Camera {
         return this._viewProjMatrix;
     }
 
+    public screenPointToRay(x: number, y: number) {
+        const pNear = vec3.fromValues(x, y, -1);
+        const pFar = vec3.fromValues(y, y, 1);
+
+        const nearWorld = vec3.create();
+        const farWorld = vec3.create();
+
+        vec3.transformMat4(nearWorld, pNear, this._invViewProjMatrix);
+        vec3.transformMat4(farWorld, pFar, this._invViewProjMatrix);
+
+        const dir = vec3.create();
+        vec3.subtract(dir, farWorld, nearWorld);
+        vec3.normalize(dir, dir);
+
+        return {
+            origin: nearWorld,
+            direction: dir
+        };
+    }
+
     // Orbit around target
     public orbit(dx: number, dy: number, orbitSpeed: number = 0.005): void {
         const offset = vec3.create();

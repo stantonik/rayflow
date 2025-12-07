@@ -23,13 +23,14 @@ export class Engine {
     private raymarcher!: RayMarcher;
     private camera!: Camera;
 
-    private _selectedObject: EngineObject | null;
-    get selectedObject() { return this._selectedObject; }
+    private _activeObject: EngineObject | null;
+    get selectedObject() { return this._activeObject; }
     onObjectSelected?: ((obj: EngineObject) => void) | null;
     onObjectUnselected?: ((obj: EngineObject) => void) | null;
+    onObjectEdited?: ((obj: EngineObject) => void) | null;
 
     private constructor() {
-        this._selectedObject = null;
+        this._activeObject = null;
     }
 
     static async create(canvas: HTMLCanvasElement): Promise<Engine> {
@@ -59,7 +60,13 @@ export class Engine {
 
     selectObject(obj: EngineObject | null) {
         this.raymarcher.selectObject(obj);
-        this._selectedObject = obj;
+        this._activeObject = obj;
+    }
+
+    setPicking(state: boolean) {
+        this.raymarcher.updateUniforms({
+            picking: state
+        });
     }
 
     render(t: number) {
@@ -96,53 +103,67 @@ export class Engine {
         let isLeftDown = false;
         let isRightDown = false;
         let lastMouse: [number, number] = [0, 0];
+        let lastMouseOnClick: [number, number] = [0, 0];
+        let gizmoAxe: number | null = null;
 
-        // --- Mouse down ---
-        canvas.addEventListener('mousedown', (e: MouseEvent) => {
+        const getMousePos = (e: MouseEvent): { x: number, y: number } => {
             const rect = canvas.getBoundingClientRect();
             const x = (e.clientX - rect.left);
             const y = (e.clientY - rect.top);
+            return { x, y };
+        }
 
+        // --- Mouse down ---
+        canvas.addEventListener('mousedown', async (e: MouseEvent) => {
+            const { x, y } = getMousePos(e);
             if (e.button === 0) isLeftDown = true;
             if (e.button === 2) isRightDown = true;
             lastMouse = [x, y];
+            lastMouseOnClick = [x, y];
 
-            this.raymarcher.updateUniforms({
-                mouse: [x, y, 1, 0],
-            });
+            const item = await this.raymarcher.checkCollision();
+            gizmoAxe = null;
+            if (item?.type == "gizmo") {
+                if (item?.idx >= 0 && item?.idx <= 2) gizmoAxe = item?.idx;
+            }
 
-            // Add little delay
-            (async () => {
-                await new Promise<void>((resolve) => setTimeout(resolve, 50));
-
-                const obj = await this.raymarcher.checkCollision();
-                if (obj) this.onObjectSelected?.(obj);
-                else if (this._selectedObject) this.onObjectUnselected?.(this._selectedObject);
-                this._selectedObject = obj;
-            })();
+            this.raymarcher.updateUniforms({ mouse: [x, y, 1, 0] });
         });
 
         // --- Mouse up ---
-        canvas.addEventListener('mouseup', (e: MouseEvent) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left);
-            const y = (e.clientY - rect.top);
-
+        canvas.addEventListener('mouseup', async (e: MouseEvent) => {
+            const { x, y } = getMousePos(e);
             if (e.button === 0) isLeftDown = false;
             if (e.button === 2) isRightDown = false;
+            const dx = x - lastMouseOnClick[0];
+            const dy = y - lastMouseOnClick[1];
+            if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+                const item = await this.raymarcher.checkCollision();
+                if (item?.type == "object") {
+                    if (item!.object) {
+                        this.selectObject(item!.object);
+                        this.onObjectSelected?.(item!.object);
+                    }
+                } else if (item?.type == null) {
+                    if (this._activeObject) {
+                        this.onObjectUnselected?.(this._activeObject);
+                        this.selectObject(null);
+                    }
+                }
+            }
+            lastMouse = [x, y];
+            lastMouseOnClick = [x, y];
 
-            this.raymarcher.updateUniforms({
-                mouse: [x, y, 0, 0],
-            });
-
+            this.raymarcher.updateUniforms({ mouse: [x, y, 0, 0] });
+        });
+        window.addEventListener('mouseup', async (e: MouseEvent) => {
+            if (e.button === 0) isLeftDown = false;
+            if (e.button === 2) isRightDown = false;
         });
 
         // --- Mouse move ---
-        canvas.addEventListener('mousemove', (e: MouseEvent) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
+        window.addEventListener('mousemove', (e: MouseEvent) => {
+            const { x, y } = getMousePos(e);
             const dx = x - lastMouse[0];
             const dy = y - lastMouse[1];
             lastMouse = [x, y];
@@ -150,10 +171,29 @@ export class Engine {
             const orbitSpeed = 0.005;
             const panSpeed = 0.01;
 
+            let clickId = 0;
+            if (isLeftDown) clickId = 1;
+            else if (isRightDown) clickId = 2;
+            this.raymarcher.updateUniforms({ mouse: [x, y, clickId, 0] });
+
             if (isLeftDown) {
-                // Orbit around target
-                this.camera.orbit(dx, dy, orbitSpeed);
-                this.camera.updateMatrices();
+                if (gizmoAxe !== null && this._activeObject) {
+                    const distance = vec3.dist(this._activeObject.position, this.camera.position);
+                    const delta = [-dx / canvas.width, dy / canvas.height, 0] as vec3;
+                    delta[2] = -delta[0];
+                    // vec3.normalize(delta, delta);
+                    vec3.scale(delta, delta, distance);
+                    // const dot = vec3.dot(this.camera.position, delta);
+                    // vec3.scale(delta, delta, dot);
+
+                    this._activeObject.position[gizmoAxe] -= delta[gizmoAxe];
+                    this._activeObject.sync();
+                    this.onObjectEdited?.(this._activeObject);
+                } else {
+                    // Orbit around target
+                    this.camera.orbit(dx, dy, orbitSpeed);
+                    this.camera.updateMatrices();
+                }
             }
 
             if (isRightDown) {

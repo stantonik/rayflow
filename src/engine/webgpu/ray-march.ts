@@ -15,6 +15,14 @@ export type RaymarchUniforms = {
     mouse?: vec4;
     time?: number;
     deltaTime?: number;
+    picking?: boolean;
+    activeObjectIdx?: number;
+}
+
+type IntersectItem = {
+    type: "gizmo" | "object" | null;
+    idx: number;
+    object?: RayObject;
 }
 
 export class RayMarcher {
@@ -38,8 +46,8 @@ export class RayMarcher {
     private camera: Camera;
     private cameraBuffer: GPUBuffer;
 
-    private _lastIntersectedObj!: RayObject | null;
-    get lastIntersectedObj() { return this._lastIntersectedObj; }
+    private _activeObject!: RayObject | null;
+    get activeObject() { return this._activeObject; }
 
     constructor(device: GPUDevice, format: GPUTextureFormat, camera: Camera) {
         this.device = device;
@@ -95,13 +103,13 @@ export class RayMarcher {
         });
 
         this.objectHitBuffer = device.createBuffer({
-            size: 4,
+            size: 8,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
         });
-        this.device.queue.writeBuffer(this.objectHitBuffer, 0, Float32Array.from([-1]).buffer);
+        this.device.queue.writeBuffer(this.objectHitBuffer, 0, Float32Array.from([-1, -1]).buffer);
 
         this.objectHitStagingBuffer = device.createBuffer({
-            size: 4,
+            size: 8,
             usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
         });
 
@@ -124,8 +132,10 @@ export class RayMarcher {
     }
 
     selectObject(obj: RayObject | null): void {
-        this.device.queue.writeBuffer(this.objectHitBuffer, 0, Float32Array.from([obj?._index ?? -1]).buffer);
-        this._lastIntersectedObj = obj;
+        this.updateUniforms({
+            activeObjectIdx: obj?.index ?? -1
+        })
+        this._activeObject = obj;
     }
 
     addObject(obj: RayObject): void {
@@ -205,7 +215,7 @@ export class RayMarcher {
             // Replace in CPU array
             this.objects[idx] = lastObj;
 
-            if (this._lastIntersectedObj === lastObj) {
+            if (this._activeObject === lastObj) {
                 this.selectObject(lastObj);
             }
         }
@@ -217,7 +227,7 @@ export class RayMarcher {
         const data = new Uint32Array([this.objects.length]);
         this.device.queue.writeBuffer(this.objectCountBuffer, 0, data.buffer);
 
-        if (this._lastIntersectedObj === obj) {
+        if (this._activeObject === obj) {
             this.selectObject(null);
         }
 
@@ -247,43 +257,62 @@ export class RayMarcher {
 
         const data = new Float32Array(12);
 
-        // resolution.xy + padding
         data.set([...(this.lastUniforms.resolution ?? [0, 0]), 0, 0], 0);
-
-        // mouse.xyzw
         data.set(this.lastUniforms.mouse ?? [0, 0, 0, 0], 4);
-
-        // time, deltaTime + padding
-        data.set([this.lastUniforms.time ?? 0, this.lastUniforms.deltaTime ?? 0, 0, 0], 8);
+        data.set([
+            this.lastUniforms.time ?? 0,
+            this.lastUniforms.deltaTime ?? 0,
+            this.lastUniforms.picking ? 1 : 0,
+            this.lastUniforms.activeObjectIdx ?? -1,
+        ], 8);
 
         this.device.queue.writeBuffer(this.uniformBuffer, 0, data.buffer);
     }
 
-    async checkCollision(): Promise<RayObject | null> {
+    async checkCollision(): Promise<IntersectItem | null> {
         const encoder = this.device.createCommandEncoder();
         encoder.copyBufferToBuffer(
-            this.objectHitBuffer,          // source: GPU-written storage buffer
-            0,               // source offset
-            this.objectHitStagingBuffer,   // destination buffer
-            0,               // destination offset
-            4
+            this.objectHitBuffer,
+            0,
+            this.objectHitStagingBuffer,
+            0,
+            8
         );
         this.device.queue.submit([encoder.finish()]);
-        await this.objectHitStagingBuffer.mapAsync(
-            GPUMapMode.READ,
-            0, // Offset
-            4, // Length, in bytes
-        );
+        await this.objectHitStagingBuffer.mapAsync(GPUMapMode.READ, 0, 8);
 
-        const copyArrayBuffer = this.objectHitStagingBuffer.getMappedRange(0, 4);
+        const copyArrayBuffer = this.objectHitStagingBuffer.getMappedRange(0, 8);
         const data = copyArrayBuffer.slice();
         this.objectHitStagingBuffer.unmap();
         const dataArr = new Float32Array(data);
-        const intersectedId = dataArr[0];
+        const type = dataArr[0];
+        const intersectedId = dataArr[1];
 
-        const obj = this.objects[intersectedId];
-        this._lastIntersectedObj = obj;
-        return obj;
+        let typeStr: string | null;
+        switch (type) {
+            case 0:
+                typeStr = "object"
+                break;
+            case 1:
+                typeStr = "gizmo"
+                break;
+            default:
+            case -1:
+                typeStr = null;
+                break
+        }
+
+        const intersectItem = {
+            type: typeStr,
+            idx: intersectedId,
+        } as IntersectItem;
+
+        if (type == 0) {
+            const obj = this.objects[intersectedId];
+            intersectItem.object = obj;
+        }
+
+        return intersectItem;
     }
 
     render(pass: GPURenderPassEncoder) {

@@ -30,6 +30,7 @@ const hierarchyPanel = panelManager.getPanel(HierarchyPanel)!;
 const canvas = scenePanel.canvas;
 const engine = await Engine.create(canvas);
 engine.resize(canvas.width, canvas.height);
+engine.setPicking(true);
 
 // Default object
 addObject(new EngineObject({ name: "Cube", color: [0.2, 0.8, 0.2] }));
@@ -54,6 +55,10 @@ engine.onObjectSelected = (obj) => {
 engine.onObjectUnselected = (obj) => {
     console.log(`unselected : ${obj.name}`);
     hierarchyPanel.activateItem(null);
+}
+
+engine.onObjectEdited = (obj) => {
+    inspectorInspect(obj);
 }
 
 // Panels callback setup
@@ -111,6 +116,13 @@ function itemCtxMenu(item: HierarchyItem) {
 function itemOnClick(item: HierarchyItem) {
     const obj = item.data?.["objectRef"] as EngineObject;
     if (obj) {
+        inspectorInspect(obj);
+    }
+}
+
+function itemOnActive(item: HierarchyItem) {
+    const obj = item.data?.["objectRef"] as EngineObject;
+    if (obj) {
         engine.selectObject(obj);
         inspectorInspect(obj);
     }
@@ -153,7 +165,7 @@ function addObject(obj: EngineObject) {
     const item = {
         name: obj.name,
         onClick: itemOnClick,
-        onActive: itemOnClick,
+        onActive: itemOnActive,
         onLeave: itemOnLeave,
         onContextMenu: itemCtxMenu,
         data: { objectRef: obj }
