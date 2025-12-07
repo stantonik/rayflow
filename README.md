@@ -53,19 +53,22 @@
 
 This project is an experimental WebGPU-based 3D editor built with TypeScript and powered by ray marching. It focuses on simplicity, real-time interaction, and a clean UI that lets you build and explore procedural scenes without heavy engines or complex tooling.
 
+[![Demo](docs/images/demo.gif)](https://stantonik.github.io/rayflow)
+<p align="center"><i>Demo</i></p>
+
 You can add unlimited primitives, manipulate them directly in the viewport, and customize their properties through intuitive panels—all rendered using a single ray-marching pipeline.
 
 The goal of the project is to serve as a lightweight playground for experimenting with signed distance fields (SDFs), procedural rendering techniques, and interactive scene editing in the browser. (_soon_)
 
 ### Features
 
-* **Unlimited primitives** — Add or delete any number of shapes (Cuboid, Ellipsoid, Torus, Cone, and more) directly from the Hierarchy Panel.
+* **Unlimited primitives** - Add or delete any number of shapes (Cuboid, Ellipsoid, Torus, Cone, and more) directly from the Hierarchy Panel.
 
-* **Intuitive object selection** — Select objects by clicking them in the scene or choosing them from the Hierarchy Panel.
+* **Intuitive object selection** - Select objects by clicking them in the scene or choosing them from the Hierarchy Panel.
 
-* **Real-time editing** — Modify any object’s properties instantly through the Inspector Panel, including Position, Rotation, Scale, Color, and more.
+* **Real-time editing** - Modify any object’s properties instantly through the Inspector Panel, including Position, Rotation, Scale, Color, and more.
 
-* **Gizmo support** — Use the built-in translation gizmo to move objects interactively within the scene. (More gizmo modes coming soon.)
+* **Gizmo support** - Use the built-in translation gizmo to move objects interactively within the scene. (More gizmo modes coming soon.)
 
 ### Built With
 
