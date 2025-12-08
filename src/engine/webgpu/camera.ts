@@ -5,7 +5,7 @@
  * Distributed under terms of the MIT license.
  */
 
-import { mat4, vec3, quat } from 'gl-matrix';
+import { mat4, vec3, quat, vec4, vec2 } from 'gl-matrix';
 
 export class Camera {
     // Public properties
@@ -72,24 +72,48 @@ export class Camera {
         return this._viewProjMatrix;
     }
 
-    public screenPointToRay(x: number, y: number) {
-        const pNear = vec3.fromValues(x, y, -1);
-        const pFar = vec3.fromValues(y, y, 1);
+    worldToScreen(worldPos: vec3, width: number, height: number): vec2 {
+        // Convert world → clip space
+        const clip = vec4.fromValues(worldPos[0], worldPos[1], worldPos[2], 1);
+        vec4.transformMat4(clip, clip, this._viewProjMatrix);
 
-        const nearWorld = vec3.create();
-        const farWorld = vec3.create();
+        // Perspective divide
+        const ndcX = clip[0] / clip[3];
+        const ndcY = clip[1] / clip[3];
 
-        vec3.transformMat4(nearWorld, pNear, this._invViewProjMatrix);
-        vec3.transformMat4(farWorld, pFar, this._invViewProjMatrix);
+        // NDC → screen space
+        const out = vec2.create();
+        out[0] = (ndcX * 0.5 + 0.5) * width;
+        out[1] = (1 - (ndcY * 0.5 + 0.5)) * height; // Y flipped
 
-        const dir = vec3.create();
-        vec3.subtract(dir, farWorld, nearWorld);
-        vec3.normalize(dir, dir);
+        return out;
+    }
 
-        return {
-            origin: nearWorld,
-            direction: dir
-        };
+
+    screenToWorldRay(x: number, y: number, width: number, height: number): { origin: vec3, direction: vec3 } {
+        // 1. Convert screen → NDC
+        const ndcX = (x / width) * 2 - 1;
+        const ndcY = 1 - (y / height) * 2;
+
+        const pNear = vec4.fromValues(ndcX, ndcY, -1, 1);
+        const pFar = vec4.fromValues(ndcX, ndcY, 1, 1);
+
+        // 2. Transform to world space
+        vec4.transformMat4(pNear, pNear, this._invViewProjMatrix);
+        vec4.transformMat4(pFar, pFar, this._invViewProjMatrix);
+
+        // 3. Perspective divide (w)
+        vec4.scale(pNear, pNear, 1 / pNear[3]);
+        vec4.scale(pFar, pFar, 1 / pFar[3]);
+
+        // 4. Extract vec3
+        const origin = vec3.fromValues(pNear[0], pNear[1], pNear[2]);
+        const far = vec3.fromValues(pFar[0], pFar[1], pFar[2]);
+
+        // 5. Direction
+        const direction = vec3.normalize(vec3.create(), vec3.subtract(vec3.create(), far, origin));
+
+        return { origin, direction };
     }
 
     // Orbit around target

@@ -5,7 +5,7 @@
  * Distributed under terms of the MIT license.
  */
 
-import { vec3 } from "gl-matrix";
+import { vec2, vec3 } from "gl-matrix";
 import { Camera } from "./webgpu/camera";
 import { RayMarcher } from "./webgpu/ray-march";
 import { initWebGPU } from "./webgpu/webgpu";
@@ -89,6 +89,8 @@ export class Engine {
 
         pass.end();
         this.device.queue.submit([encoder.finish()]);
+
+        this.raymarcher.readCollisionBuffer();
     }
 
     resize(width: number, height: number) {
@@ -121,7 +123,7 @@ export class Engine {
             lastMouse = [x, y];
             lastMouseOnClick = [x, y];
 
-            const item = await this.raymarcher.checkCollision();
+            const item = this.raymarcher.checkCollision();
             gizmoAxe = null;
             if (item?.type == "gizmo") {
                 if (item?.idx >= 0 && item?.idx <= 2) gizmoAxe = item?.idx;
@@ -138,7 +140,7 @@ export class Engine {
             const dx = x - lastMouseOnClick[0];
             const dy = y - lastMouseOnClick[1];
             if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-                const item = await this.raymarcher.checkCollision();
+                const item = this.raymarcher.checkCollision();
                 if (item?.type == "object") {
                     if (item!.object) {
                         this.selectObject(item!.object);
@@ -179,23 +181,37 @@ export class Engine {
 
             if (isLeftDown) {
                 if (gizmoAxe !== null && this._activeObject) {
-                    // 1. Mouse delta in normalized screen space
-                    const delta = vec3.fromValues(dx / canvas.width, -dy / canvas.height, 0);
+                    const axis = vec3.create();
+                    axis[gizmoAxe] = 1;
 
-                    // 2. Scale by distance and optional sensitivity
-                    const distance = vec3.dist(this._activeObject.position, this.camera.position);
-                    vec3.scale(delta, delta, distance);
+                    const p0 = this._activeObject.position;
+                    const p1 = vec3.add(vec3.create(), p0, axis);
 
-                    // 3. Convert to world space
-                    const worldDelta = vec3.create();
-                    vec3.scaleAndAdd(worldDelta, worldDelta, this.camera.right, delta[0]);
-                    vec3.scaleAndAdd(worldDelta, worldDelta, this.camera.up, delta[1]);
-                    vec3.scaleAndAdd(worldDelta, worldDelta, this.camera.forward, delta[0]);
+                    // project to screen using viewProjMatrix
+                    const s0 = this.camera.worldToScreen(p0, canvas.width, canvas.height);
+                    const s1 = this.camera.worldToScreen( p1, canvas.width, canvas.height);
 
-                    // 4. Apply movement along the gizmo axis
-                    this._activeObject.position[gizmoAxe] += worldDelta[gizmoAxe];
+                    // 2D axis direction on screen
+                    const screenAxis = vec2.normalize(vec2.create(), vec2.sub(vec2.create(), s1, s0));
+
+                    // mouse delta
+                    const mouseDelta = vec2.fromValues(dx, dy);
+
+                    // how much mouse moved along the axis direction
+                    const amount = vec2.dot(mouseDelta, screenAxis);
+
+                    // scale amount by distance to camera
+                    const distance = vec3.dist(p0, this.camera.position);
+                    const scale = distance * 0.001; // tweak this sensitivity constant
+
+                    // convert screen movement → world
+                    const worldDelta = vec3.scale(vec3.create(), axis, amount * scale);
+
+                    // apply
+                    vec3.add(this._activeObject.position, this._activeObject.position, worldDelta);
                     this._activeObject.sync();
                     this.onObjectEdited?.(this._activeObject);
+
                 } else {
                     // Orbit around target
                     this.camera.orbit(dx, dy, orbitSpeed);

@@ -41,6 +41,7 @@ export class RayMarcher {
     private objectCountBuffer: GPUBuffer;
     private vertexBuffer: GPUBuffer;
 
+    private lastCollision: IntersectItem | null;
     private collisionPending: boolean;
     private objectHitBuffer: GPUBuffer;
     private objectHitStagingBuffer: GPUBuffer;
@@ -57,6 +58,7 @@ export class RayMarcher {
         this.lastUniforms = {};
         this.objects = [];
         this.collisionPending = false;
+        this.lastCollision = null;
 
         // Create ray marching display
         const vertices = new Float32Array([
@@ -274,8 +276,12 @@ export class RayMarcher {
         this.device.queue.writeBuffer(this.uniformBuffer, 0, data.buffer);
     }
 
-    async checkCollision(): Promise<IntersectItem | null> {
-        if (this.collisionPending) return null;
+    checkCollision(): IntersectItem | null {
+        return this.lastCollision;
+    }
+
+    async readCollisionBuffer(): Promise<void> {
+        if (this.collisionPending) return;
         this.collisionPending = true;
 
         const encoder = this.device.createCommandEncoder();
@@ -302,6 +308,8 @@ export class RayMarcher {
         const type = dataArr[0];
         const intersectedId = dataArr[1];
 
+        console.log()
+
         let typeStr: string | null;
         switch (type) {
             case 0:
@@ -326,7 +334,7 @@ export class RayMarcher {
             intersectItem.object = obj;
         }
 
-        return intersectItem;
+        this.lastCollision = intersectItem;
     }
 
     render(pass: GPURenderPassEncoder) {

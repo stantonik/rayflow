@@ -26,6 +26,15 @@ struct Object {
     id: f32,
 };
 
+// -------------------------------------------------------------
+// SDFResult: unified return for distance + material + index + color
+// -------------------------------------------------------------
+struct SDFResult {
+    dist: f32,
+    mat: f32,
+    idx: f32,
+};
+
 @group(0) @binding(0)
 var<uniform> uniforms : Uniforms;
 
@@ -53,15 +62,6 @@ fn vs_main(@location(0) position: vec2<f32>) -> VertexOut {
     out.position = vec4(position, 0.0, 1.0);
     return out;
 }
-
-// -------------------------------------------------------------
-// SDFResult: unified return for distance + material + index + color
-// -------------------------------------------------------------
-struct SDFResult {
-    dist: f32,
-    mat: f32,
-    idx: f32,
-};
 
 // -------------------------------------------------------------
 const MAX_DIST: f32 = 100.0;
@@ -176,7 +176,6 @@ fn rotate_z(p: vec3<f32>, angle: f32) -> vec3<f32> {
 fn sdf_primitive(p: vec3<f32>, primitiveType: u32, scale: vec3<f32>, rotation: vec3<f32>) -> f32 {
     var q = p;
 
-    // Apply rotation (simple Y rotation for demonstration; can extend to XYZ)
     if rotation.x != 0.0 {
         q = rotate_x(q, rotation.x / 180.0 * PI);
     }
@@ -241,7 +240,7 @@ fn get_material_color(p: vec3<f32>, res: SDFResult) -> vec3<f32> {
         let obj = objects[idx];
         color = obj.color;
         // Highlight selected obj
-        if (idx == i32(uniforms.activeObjIdx)) {
+        if idx == i32(uniforms.activeObjIdx) {
             color = mix(color, vec3<f32>(1.0, 0.0, 0.0), 0.4);
         }
     } else if res.mat == MAT_GRID {
@@ -279,10 +278,7 @@ fn get_material_color(p: vec3<f32>, res: SDFResult) -> vec3<f32> {
 // OBJECT DISTANCE (with object color)
 // -------------------------------------------------------------
 fn get_dist_obj(p: vec3<f32>) -> SDFResult {
-    var res: SDFResult;
-    res.dist = MAX_DIST;
-    res.mat = -1.0;
-    res.idx = -1.0;
+    var res = SDFResult(MAX_DIST, MAT_OBJ, -1.0);
 
     for (var i: u32 = 0u; i < objectCount; i++) {
         let obj = objects[i];
@@ -294,7 +290,6 @@ fn get_dist_obj(p: vec3<f32>) -> SDFResult {
         if d < res.dist {
             res.dist = d;
             res.idx = f32(i);
-            res.mat = MAT_OBJ;
         }
     }
 
@@ -302,9 +297,7 @@ fn get_dist_obj(p: vec3<f32>) -> SDFResult {
 }
 
 fn get_dist_gizmo_arrow(p: vec3<f32>) -> SDFResult {
-    var res: SDFResult;
-    res.dist = MAX_DIST;
-    res.mat = MAT_GIZMO_ARROW;
+    var res = SDFResult(MAX_DIST, MAT_GIZMO_ARROW, -1.0);
 
     if uniforms.activeObjIdx < 0.0 {
         return res;
@@ -313,8 +306,6 @@ fn get_dist_gizmo_arrow(p: vec3<f32>) -> SDFResult {
 
     let q = p - trackedObj.position;
     let s = trackedObj.scale * 1.2;
-
-    //let sx = trackedObj.
 
     let cone_dia = 0.1;
     let cone_h = 0.1;
@@ -347,9 +338,7 @@ fn get_dist_gizmo_arrow(p: vec3<f32>) -> SDFResult {
 }
 
 fn get_dist_gizmo(p: vec3<f32>) -> SDFResult {
-    var res: SDFResult;
-    res.dist = MAX_DIST;
-    res.mat = MAT_GIZMO;
+    var res = SDFResult(MAX_DIST, MAT_GIZMO, -1.0);
 
     if uniforms.activeObjIdx < 0.0 {
         return res;
@@ -394,17 +383,12 @@ fn get_dist_gizmo(p: vec3<f32>) -> SDFResult {
 }
 
 fn get_dist_grid(p: vec3<f32>) -> SDFResult {
-    var res: SDFResult;
-    res.dist = MAX_DIST;
-    res.mat = -1.0;
-    res.idx = -1.0;
+    var res = SDFResult(MAX_DIST, MAT_GRID, -1.0);
 
     // ----- GRID -----
     let gd = sd_grid_2D(p, GRID_LINE_WIDTH, 1.0, 20.0, 20.0);
     if gd < res.dist {
         res.dist = gd;
-        res.idx = -1.0;
-        res.mat = MAT_GRID;
     }
 
     return res;
@@ -415,10 +399,7 @@ fn get_dist_grid(p: vec3<f32>) -> SDFResult {
 // SCENE SDF (distance + material + color integrated here)
 // -------------------------------------------------------------
 fn get_dist(p: vec3<f32>) -> SDFResult {
-    var res: SDFResult;
-    res.dist = MAX_DIST;
-    res.mat = -1.0;
-    res.idx = -1.0;
+    var res = SDFResult(MAX_DIST, -1.0, -1.0);
 
     // ----- GRID -----
     let g = get_dist_grid(p);
@@ -439,15 +420,10 @@ fn get_dist(p: vec3<f32>) -> SDFResult {
 // RAY MARCH (returns SDFResult including color)
 // -------------------------------------------------------------
 fn ray_march(ro: vec3<f32>, rd: vec3<f32>, mode: u32) -> SDFResult {
-    var total = 0.0;
-    var res: SDFResult;
-
-    res.dist = MAX_DIST;
-    res.idx = -1.0;
-    res.mat = -1.0;
+    var res = SDFResult(0.0, -1.0, -1.0);
 
     for (var i = 0; i < MAX_STEPS; i++) {
-        let p = ro + rd * total;
+        let p = ro + rd * res.dist;
         var s: SDFResult;
 
         if mode == 0u {
@@ -458,16 +434,15 @@ fn ray_march(ro: vec3<f32>, rd: vec3<f32>, mode: u32) -> SDFResult {
             s = get_dist_obj(p);
         }
 
-        total += s.dist;
-        res = s;
+        res.dist += s.dist;
 
-        if s.dist < SURF_DIST || total > MAX_DIST {
-            res.dist = total;
-            return res;
+        if s.dist < SURF_DIST || res.dist > MAX_DIST {
+            res.mat = s.mat;
+            res.idx = s.idx;
+            break;
         }
     }
 
-    res.dist = total;
     return res;
 }
 
@@ -481,31 +456,33 @@ fn get_normal(p: vec3<f32>) -> vec3<f32> {
     ));
 }
 
-// -------------------------------------------------------------
-// return vec2(type, index)
-fn pick(ro: vec3<f32>, rd: vec3<f32>) -> vec2<f32> {
-    var t = 0.0;
+fn pick(ro: vec3<f32>, rd: vec3<f32>, mode: u32) -> SDFResult {
+    var res = SDFResult(0.0, -1.0, -1.0);
 
     for (var i = 0; i < MAX_STEPS_PICK; i++) {
-        let p = ro + rd * t;
-        var s = get_dist_obj(p);
+        let p = ro + rd * res.dist;
+        var s: SDFResult;
 
-        if uniforms.activeObjIdx >= 0.0 {
-            let q = get_dist_gizmo_arrow(p);
-            if q.dist < MAX_DIST {
-                s = q;
-            } 
+        if mode == 0u {
+            s = get_dist_obj(p);
+        } else if mode == 1u {
+            s = get_dist_gizmo_arrow(p);
         }
 
-        t += s.dist;
         if s.dist < SURF_DIST_PICK {
-            return vec2<f32>(s.mat, s.idx);
+            res.mat = s.mat;
+            res.idx = s.idx;
+            break;
         }
-        if t > MAX_DIST_PICK {
+
+        res.dist += s.dist;
+
+        if res.dist > MAX_DIST_PICK {
             break;
         }
     }
-    return vec2<f32>(-1.0, -1.0);
+
+    return res;
 }
 
 // -------------------------------------------------------------
@@ -519,31 +496,24 @@ fn gamma_correct(c: vec3<f32>) -> vec3<f32> {
 fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
     let uv = fragCoord.xy * 2.0 / uniforms.resolution.xy - 1.0;
 
-    // Mouse picking ray
-    if i32(fragCoord.x) < i32(uniforms.mouse.x) && i32(fragCoord.y) == i32(uniforms.mouse.y) && u32(uniforms.picking) == 1u {
-        let ndc = vec4(
-            (uniforms.mouse.x * 2.0 / uniforms.resolution.x - 1.0),
-            -(uniforms.mouse.y * 2.0 / uniforms.resolution.y - 1.0),
-            1.0,
-            1.0
-        );
-
-        let wp = camera.invViewProj * ndc;
-        let pos3 = wp.xyz / wp.w;
-
-        let ro = camera.position;
-        let rd = normalize(pos3 - ro);
-
-        let pick_res = pick(ro, rd);
-        objectHitBuffer[0] = pick_res;
-    }
-
     // Main view ray
     let ndc = vec4(uv.x, -uv.y, 1.0, 1.0);
     let wp = camera.invViewProj * ndc;
     let pos3 = wp.xyz / wp.w;
     let ro = camera.position;
     let rd = normalize(pos3 - ro);
+
+    // Mouse picking ray
+    if i32(fragCoord.x) == i32(uniforms.mouse.x) && i32(fragCoord.y) == i32(uniforms.mouse.y) && u32(uniforms.picking) == 1u {
+        var pick_res = pick(ro, rd, 0u);
+        if (uniforms.activeObjIdx >= 0.0) {
+            let g = pick(ro, rd, 1u);
+            if g.dist < MAX_DIST_PICK {
+                pick_res = g;
+            }
+        }
+        objectHitBuffer[0] = vec2<f32>(pick_res.mat, pick_res.idx);
+    }
 
     var hit = ray_march(ro, rd, 0u);
 
@@ -573,7 +543,6 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
 
             // Shadow
             let shadow_pos = hit_pos + normal * 0.01;
-            // let shadow = select(0.3, 1.0, ray_march(shadow_pos, light_dir, 0u).dist > length(light_pos - shadow_pos));
             let shadow = select(1.0, ambient, ray_march(shadow_pos, light_dir, 2u).dist < MAX_DIST);
 
 
